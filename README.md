@@ -1,47 +1,69 @@
 # Haven Launcher
 
-Haven is an Android home-screen project combining the restrained hardware-led visual language of Nothing OS with the useful, familiar foundations of Pixel Launcher. It is built with Kotlin, Jetpack Compose and Material 3, with Android Monet wallpaper colours on supported devices.
+Haven is a lightweight Android home-screen launcher combining the restrained, hardware-led visual language of Nothing OS with the useful familiarity of Pixel Launcher.
 
-## MVP features
+- **Application ID:** `app.tab.home`
+- **Language:** Kotlin
+- **UI:** Jetpack Compose + Material 3
+- **Minimum Android:** 8.0 (API 26)
+- **Target Android:** API 35
+- **Architectures:** `armeabi-v7a` and `arm64-v8a`
 
-- HOME role entry point and a normal app-drawer launch entry.
-- Native home surface with clock, date, frequent apps and app-drawer entry.
-- App drawer with live name filtering and configurable 3–6 column grid.
-- Launch installed apps through their resolved launcher activities.
-- Android 12+ Monet dynamic light/dark colour schemes, with a custom palette fallback.
-- System, light and dark appearance modes.
-- Accent selection, app-label visibility and persisted preferences using DataStore.
-- Swipe-up drawer gesture and system back handling.
-- Adaptive launcher icon.
+## Features
 
-## Stack
+- Minimal home screen with clock and date
+- App drawer with live search
+- Installed app icons and launching
+- Swipe-up drawer gesture
+- Monet dynamic colours on Android 12+
+- Light, dark, and system themes
+- Custom accent palettes on older Android versions
+- Adjustable app grid (3–6 columns)
+- Persistent launcher preferences
+- Low-overhead app discovery and lazy app grid
 
-- Kotlin + Jetpack Compose
-- Material 3 components and expressive layout principles
-- DataStore Preferences
-- Minimum Android API 26; Monet dynamic colours on API 31+
-- Compile SDK 36; target SDK 35
+## Build APKs
 
-## Build
+GitHub Actions builds two separate debug APKs on pushes to `main`, pull requests, and manual workflow dispatch.
 
-Open the repository in Android Studio with JDK 17 and Android SDK 36 installed. Sync Gradle and run the `app` configuration. A Gradle wrapper is not committed yet, so Android Studio may prompt to generate one or you can run `gradle wrapper` using a compatible local Gradle installation.
+1. Open the repository's **Actions** tab.
+2. Select **Android APKs** and open a successful run.
+3. Download either `haven-armeabi-v7a-debug` or `haven-arm64-v8a-debug`.
 
-## Performance decisions
+The workflow installs Gradle 8.13 directly because this repository does not currently commit a Gradle wrapper.
 
-- The home screen and app drawer are native Compose UI; no WebView is in the interaction path.
-- App discovery runs on `Dispatchers.IO` and the drawer uses a lazy grid.
-- The app list is loaded when the launcher enters the foreground, not polled continuously.
-- No background service, network permission, analytics SDK or unnecessary runtime permission is included.
-- App icons are loaded by Android's package manager as needed.
+For a local build with Gradle 8.13 installed:
 
-## Current MVP boundaries
+```bash
+gradle --no-daemon :app:assembleDebug
+```
 
-This is a functional foundation, not a feature-complete commercial launcher. Workspace drag-and-drop, folders, user-managed dock pins, widgets, icon-pack support, backup/restore, per-app hiding, gesture customization, wallpaper picker integration and a web-based theme editor remain future work. App usage ranking is not inferred from launch history; the current frequent row uses a deterministic initial selection.
+APK outputs are written to `app/build/outputs/apk/debug/`. ABI splits are enabled, so the build emits architecture-specific APKs rather than a universal APK.
 
-## Inspiration
+## Project structure
 
-Haven takes broad product cues from Nothing OS and Pixel Launcher. It does not use their proprietary assets, icons, source code or branding.
+```
+app/
+  src/main/
+    java/com/tabgl/haven/
+      data/
+      ui/
+      MainActivity.kt
+    res/
+  build.gradle.kts
+gradle/
+  libs.versions.toml
+.github/
+  workflows/
+    android-apk.yml
+docs/
+  MVP.md
+```
 
-## License
+## Scope
 
-No license has been selected. All rights remain with their respective owners until a license is added.
+The current MVP focuses on a fast, configurable launcher foundation. Widgets, drag-and-drop workspace editing, folders, icon packs, backup/restore, and advanced gesture customization remain future work.
+
+## Validation
+
+The GitHub Actions workflow is the reproducible build check. A green workflow run is required before treating generated APKs as verified.
