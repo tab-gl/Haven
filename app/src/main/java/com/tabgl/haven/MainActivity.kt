@@ -6,7 +6,6 @@ import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.compose.BackHandler
 import androidx.compose.animation.AnimatedContent
-import androidx.compose.animation.Crossfade
 import androidx.compose.animation.core.spring
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
@@ -44,28 +43,25 @@ import androidx.compose.material.icons.rounded.Apps
 import androidx.compose.material.icons.rounded.ArrowBack
 import androidx.compose.material.icons.rounded.Close
 import androidx.compose.material.icons.rounded.Search
-import androidx.compose.material.icons.rounded.Settings
 import androidx.compose.material.icons.rounded.Tune
-import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
-import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
-import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Slider
+import androidx.compose.material3.Surface
 import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
-import androidx.compose.material3.TextButton
 import androidx.compose.material3.rememberModalBottomSheetState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
@@ -81,14 +77,12 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.viewinterop.AndroidView
 import android.widget.ImageView
-import androidx.lifecycle.lifecycleScope
 import com.tabgl.haven.data.AppRepository
 import com.tabgl.haven.data.LauncherApp
 import com.tabgl.haven.data.LauncherPreferences
 import com.tabgl.haven.data.LauncherSettings
 import com.tabgl.haven.ui.HavenTheme
 import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import java.text.SimpleDateFormat
 import java.util.Date
@@ -97,6 +91,7 @@ import java.util.Locale
 class MainActivity : ComponentActivity() {
     private lateinit var preferences: LauncherPreferences
     private val appRepository by lazy { AppRepository(packageManager) }
+    private var foregroundRefresh by mutableIntStateOf(0)
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -107,6 +102,7 @@ class MainActivity : ComponentActivity() {
                 HavenApp(
                     settings = settings,
                     preferences = preferences,
+                    refreshToken = foregroundRefresh,
                     loadApps = { withContext(Dispatchers.IO) { appRepository.loadApps() } },
                     launchApp = ::launchApp
                 )
@@ -117,7 +113,7 @@ class MainActivity : ComponentActivity() {
     override fun onResume() {
         super.onResume()
         if (::preferences.isInitialized) {
-            // Package list is refreshed by the composable when it returns to the foreground.
+            foregroundRefresh++
             window.statusBarColor = android.graphics.Color.TRANSPARENT
             window.navigationBarColor = android.graphics.Color.TRANSPARENT
             if (android.os.Build.VERSION.SDK_INT >= 29) {
@@ -137,15 +133,15 @@ class MainActivity : ComponentActivity() {
     }
 }
 
-@OptIn(ExperimentalFoundationApi::class, ExperimentalMaterial3Api::class)
+@OptIn(ExperimentalFoundationApi::class)
 @Composable
 private fun HavenApp(
     settings: LauncherSettings,
     preferences: LauncherPreferences,
+    refreshToken: Int,
     loadApps: suspend () -> List<LauncherApp>,
     launchApp: (LauncherApp) -> Unit
 ) {
-    val context = LocalContext.current
     var apps by remember { mutableStateOf(emptyList<LauncherApp>()) }
     var drawerOpen by remember { mutableStateOf(false) }
     var settingsOpen by remember { mutableStateOf(false) }
@@ -153,8 +149,8 @@ private fun HavenApp(
     var clock by remember { mutableStateOf(timeNow()) }
     var date by remember { mutableStateOf(dateNow()) }
 
+    LaunchedEffect(refreshToken) { apps = loadApps() }
     LaunchedEffect(Unit) {
-        apps = loadApps()
         while (true) {
             val now = System.currentTimeMillis()
             clock = timeNow()
@@ -203,11 +199,9 @@ private fun HavenApp(
                     Icon(Icons.Rounded.Tune, contentDescription = "Customize launcher")
                 }
             }
-
             Spacer(Modifier.height(38.dp))
             Text(clock, fontSize = 68.sp, lineHeight = 72.sp, fontWeight = FontWeight.Light, letterSpacing = (-4).sp, color = MaterialTheme.colorScheme.onBackground)
             Text(date, style = MaterialTheme.typography.titleMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
-
             Spacer(Modifier.height(30.dp))
             Row(verticalAlignment = Alignment.CenterVertically) {
                 Text("FREQUENT", style = MaterialTheme.typography.labelMedium, letterSpacing = 1.6.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
@@ -229,7 +223,6 @@ private fun HavenApp(
                     }
                 }
             }
-
             Spacer(Modifier.height(24.dp))
             Card(
                 modifier = Modifier.fillMaxWidth().weight(1f).clickable { drawerOpen = true },
@@ -249,7 +242,6 @@ private fun HavenApp(
                     }
                 }
             }
-
             Spacer(Modifier.height(16.dp))
             Row(
                 Modifier.fillMaxWidth().clip(CircleShape)
@@ -273,21 +265,19 @@ private fun HavenApp(
             label = "drawer"
         ) { open ->
             if (open) AppDrawer(
-                apps = filtered,
-                query = search,
-                onQuery = { search = it },
+                apps = filtered, query = search, onQuery = { search = it },
                 onClose = { drawerOpen = false; search = "" },
                 onLaunch = { launchApp(it); drawerOpen = false; search = "" },
-                showLabels = settings.showLabels,
-                columns = settings.columns
+                showLabels = settings.showLabels, columns = settings.columns
             )
         }
     }
 
     if (settingsOpen) {
-        ModalBottomSheet(onDismissRequest = { settingsOpen = false }, sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)) {
-            SettingsPanel(settings, preferences)
-        }
+        androidx.compose.material3.ModalBottomSheet(
+            onDismissRequest = { settingsOpen = false },
+            sheetState = androidx.compose.material3.rememberModalBottomSheetState(skipPartiallyExpanded = true)
+        ) { SettingsPanel(settings, preferences) }
     }
 }
 
@@ -323,17 +313,14 @@ private fun AppDrawer(
         }
         Spacer(Modifier.height(18.dp))
         LazyVerticalGrid(
-            columns = GridCells.Fixed(columns),
-            modifier = Modifier.weight(1f),
+            columns = GridCells.Fixed(columns), modifier = Modifier.weight(1f),
             contentPadding = PaddingValues(bottom = 30.dp),
-            horizontalArrangement = Arrangement.spacedBy(8.dp),
-            verticalArrangement = Arrangement.spacedBy(18.dp)
+            horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(18.dp)
         ) {
             items(apps, key = { it.packageName }) { app ->
                 Column(
                     Modifier.clip(RoundedCornerShape(20.dp)).clickable { onLaunch(app) }.padding(vertical = 8.dp, horizontal = 2.dp),
-                    horizontalAlignment = Alignment.CenterHorizontally,
-                    verticalArrangement = Arrangement.spacedBy(8.dp)
+                    horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(8.dp)
                 ) {
                     AppIcon(app, Modifier.size(48.dp))
                     if (showLabels) Text(app.label, style = MaterialTheme.typography.labelSmall, maxLines = 2, minLines = 1, overflow = TextOverflow.Ellipsis, textAlign = androidx.compose.ui.text.style.TextAlign.Center)
@@ -364,22 +351,26 @@ private fun SettingsPanel(settings: LauncherSettings, preferences: LauncherPrefe
         Text("Appearance", style = MaterialTheme.typography.titleMedium)
         Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
             listOf("system" to "System", "light" to "Light", "dark" to "Dark").forEach { (value, label) ->
-                val selected = settings.themeMode == value
-                if (selected) Button(onClick = {}, enabled = false, modifier = Modifier.weight(1f), contentPadding = PaddingValues(horizontal = 4.dp)) { Text(label) }
-                else OutlinedButton(onClick = { scope.launch { preferences.setThemeMode(value) } }, modifier = Modifier.weight(1f), contentPadding = PaddingValues(horizontal = 4.dp)) { Text(label) }
+                if (settings.themeMode == value) {
+                    Button(onClick = {}, enabled = false, modifier = Modifier.weight(1f), contentPadding = PaddingValues(horizontal = 4.dp)) { Text(label) }
+                } else {
+                    OutlinedButton(onClick = { scope.launch { preferences.setThemeMode(value) } }, modifier = Modifier.weight(1f), contentPadding = PaddingValues(horizontal = 4.dp)) { Text(label) }
+                }
             }
         }
         Row(verticalAlignment = Alignment.CenterVertically) {
             Column(Modifier.weight(1f)) {
                 Text("Monet colours", style = MaterialTheme.typography.titleSmall)
-                Text("Use your wallpaper colours on Android 12+", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                Text("Use wallpaper colours on Android 12+", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
             }
             Switch(checked = settings.monetEnabled, onCheckedChange = { scope.launch { preferences.setMonetEnabled(it) } })
         }
         Text("Accent colour", style = MaterialTheme.typography.titleSmall)
         Row(horizontalArrangement = Arrangement.spacedBy(14.dp)) {
             listOf("lime" to Color(0xFFC9FF42), "blue" to Color(0xFF8AB4F8), "coral" to Color(0xFFFF8A80), "violet" to Color(0xFFD0BCFF)).forEach { (name, color) ->
-                Box(Modifier.size(42.dp).clip(CircleShape).background(color).clickable { scope.launch { preferences.setAccent(name); preferences.setMonetEnabled(false) } })
+                Box(Modifier.size(42.dp).clip(CircleShape).background(color).clickable {
+                    scope.launch { preferences.setAccent(name); preferences.setMonetEnabled(false) }
+                })
             }
         }
         Row(verticalAlignment = Alignment.CenterVertically) {
@@ -394,7 +385,9 @@ private fun SettingsPanel(settings: LauncherSettings, preferences: LauncherPrefe
                 Text("App grid", style = MaterialTheme.typography.titleSmall, modifier = Modifier.weight(1f))
                 Text("${settings.columns} columns", color = MaterialTheme.colorScheme.primary, style = MaterialTheme.typography.labelLarge)
             }
-            Slider(value = settings.columns.toFloat(), onValueChange = { scope.launch { preferences.setColumns(it.toInt()) } }, valueRange = 3f..6f, steps = 2)
+            Slider(value = settings.columns.toFloat(), onValueChange = { value ->
+                scope.launch { preferences.setColumns(value.toInt().coerceIn(3, 6)) }
+            }, valueRange = 3f..6f, steps = 2)
         }
         Text("Haven · Early access", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
     }
