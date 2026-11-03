@@ -8,6 +8,8 @@ import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.animation.slideInVertically
 import androidx.compose.animation.slideOutVertically
+import androidx.compose.animation.scaleIn
+import androidx.compose.animation.scaleOut
 import androidx.compose.animation.togetherWith
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.background
@@ -37,6 +39,7 @@ import androidx.compose.foundation.lazy.grid.GridCells
 import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
 import androidx.compose.foundation.lazy.grid.items
 import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.shape.CutCornerShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.BasicTextField
 import androidx.compose.material.icons.Icons
@@ -46,6 +49,7 @@ import androidx.compose.material.icons.rounded.Close
 import androidx.compose.material.icons.rounded.Search
 import androidx.compose.material.icons.rounded.Tune
 import androidx.compose.material3.Button
+import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.Icon
@@ -85,7 +89,7 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 
-@OptIn(ExperimentalFoundationApi::class)
+@OptIn(ExperimentalFoundationApi::class, ExperimentalMaterial3Api::class)
 @Composable
 fun HavenRoot() {
     val context = LocalContext.current
@@ -106,7 +110,7 @@ fun HavenRoot() {
     }
 }
 
-@OptIn(ExperimentalFoundationApi::class)
+@OptIn(ExperimentalFoundationApi::class, ExperimentalMaterial3Api::class)
 @Composable
 private fun HavenAppContent(
     settings: LauncherSettings,
@@ -182,7 +186,7 @@ private fun HavenAppContent(
                         horizontalAlignment = Alignment.CenterHorizontally,
                         verticalArrangement = Arrangement.spacedBy(7.dp)
                     ) {
-                        AppIcon(app, Modifier.size(34.dp))
+                        AppIcon(app, Modifier.size(34.dp), settings.iconShape)
                         if (settings.showLabels) Text(app.label, maxLines = 1, overflow = TextOverflow.Ellipsis, style = MaterialTheme.typography.labelSmall)
                     }
                 }
@@ -223,8 +227,12 @@ private fun HavenAppContent(
         AnimatedContent(
             targetState = drawerOpen,
             transitionSpec = {
-                (fadeIn(spring(stiffness = 500f)) + slideInVertically(initialOffsetY = { it / 14 }, animationSpec = spring(stiffness = 500f))) togetherWith
-                    (fadeOut(spring(stiffness = 500f)) + slideOutVertically(targetOffsetY = { it / 14 }, animationSpec = spring(stiffness = 500f)))
+                (fadeIn(animationSpec = spring(dampingRatio = 0.72f, stiffness = 360f)) +
+                    slideInVertically(initialOffsetY = { it / 10 }, animationSpec = spring(dampingRatio = 0.72f, stiffness = 360f)) +
+                    scaleIn(initialScale = 0.965f, animationSpec = spring(dampingRatio = 0.68f, stiffness = 340f))) togetherWith
+                    (fadeOut(animationSpec = spring(stiffness = 520f)) +
+                    slideOutVertically(targetOffsetY = { it / 18 }, animationSpec = spring(stiffness = 520f)) +
+                    scaleOut(targetScale = 1.025f, animationSpec = spring(stiffness = 420f)))
             },
             label = "drawer"
         ) { open ->
@@ -232,7 +240,7 @@ private fun HavenAppContent(
                 apps = filtered, query = search, onQuery = { search = it },
                 onClose = { drawerOpen = false; search = "" },
                 onLaunch = { launchApp(it); drawerOpen = false; search = "" },
-                showLabels = settings.showLabels, columns = settings.columns
+                showLabels = settings.showLabels, columns = settings.columns, iconShape = settings.iconShape
             )
         }
     }
@@ -249,7 +257,7 @@ private fun HavenAppContent(
 private fun AppDrawer(
     apps: List<LauncherApp>, query: String, onQuery: (String) -> Unit,
     onClose: () -> Unit, onLaunch: (LauncherApp) -> Unit,
-    showLabels: Boolean, columns: Int
+    showLabels: Boolean, columns: Int, iconShape: String
 ) {
     Column(
         Modifier.fillMaxSize().background(MaterialTheme.colorScheme.background)
@@ -289,7 +297,7 @@ private fun AppDrawer(
                     Modifier.clip(RoundedCornerShape(20.dp)).clickable { onLaunch(app) }.padding(vertical = 8.dp, horizontal = 2.dp),
                     horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(8.dp)
                 ) {
-                    AppIcon(app, Modifier.size(48.dp))
+                    AppIcon(app, Modifier.size(48.dp), iconShape)
                     if (showLabels) Text(app.label, style = MaterialTheme.typography.labelSmall, maxLines = 2, minLines = 1, overflow = TextOverflow.Ellipsis, textAlign = androidx.compose.ui.text.style.TextAlign.Center)
                 }
             }
@@ -298,10 +306,15 @@ private fun AppDrawer(
 }
 
 @Composable
-private fun AppIcon(app: LauncherApp, modifier: Modifier = Modifier) {
+private fun AppIcon(app: LauncherApp, modifier: Modifier = Modifier, iconShape: String = "squircle") {
     val context = LocalContext.current
     AndroidView(
-        modifier = modifier,
+        modifier = modifier.clip(when (iconShape) {
+            "circle" -> CircleShape
+            "rounded" -> RoundedCornerShape(28)
+            "square" -> CutCornerShape(18)
+            else -> RoundedCornerShape(34)
+        }),
         factory = { ImageView(it).apply { scaleType = ImageView.ScaleType.FIT_CENTER } },
         update = { image ->
             image.contentDescription = app.label
@@ -310,6 +323,7 @@ private fun AppIcon(app: LauncherApp, modifier: Modifier = Modifier) {
     )
 }
 
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 private fun SettingsPanel(settings: LauncherSettings, preferences: LauncherPreferences) {
     val scope = androidx.compose.runtime.rememberCoroutineScope()
@@ -332,12 +346,35 @@ private fun SettingsPanel(settings: LauncherSettings, preferences: LauncherPrefe
             }
             Switch(checked = settings.monetEnabled, onCheckedChange = { scope.launch { preferences.setMonetEnabled(it) } })
         }
-        Text("Accent colour", style = MaterialTheme.typography.titleSmall)
-        Row(horizontalArrangement = Arrangement.spacedBy(14.dp)) {
-            listOf("lime" to Color(0xFFC9FF42), "blue" to Color(0xFF8AB4F8), "coral" to Color(0xFFFF8A80), "violet" to Color(0xFFD0BCFF)).forEach { (name, color) ->
-                Box(Modifier.size(42.dp).clip(CircleShape).background(color).clickable {
-                    scope.launch { preferences.setAccent(name); preferences.setMonetEnabled(false) }
-                })
+        Text("Material 3 palette", style = MaterialTheme.typography.titleSmall)
+        Text("Choose a complete tonal family", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            listOf("aurora" to "Aurora", "ocean" to "Ocean", "sunset" to "Sunset").forEach { (value, label) ->
+                if (settings.palette == value) Button(onClick = {}, enabled = false, modifier = Modifier.weight(1f), contentPadding = PaddingValues(horizontal = 2.dp)) { Text(label, maxLines = 1) }
+                else OutlinedButton(onClick = { scope.launch { preferences.setPalette(value); preferences.setMonetEnabled(false) } }, modifier = Modifier.weight(1f), contentPadding = PaddingValues(horizontal = 2.dp)) { Text(label, maxLines = 1) }
+            }
+        }
+        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            listOf("lavender" to "Lavender", "mono" to "Mono").forEach { (value, label) ->
+                if (settings.palette == value) Button(onClick = {}, enabled = false) { Text(label) }
+                else OutlinedButton(onClick = { scope.launch { preferences.setPalette(value); preferences.setMonetEnabled(false) } }) { Text(label) }
+            }
+        }
+        if (settings.palette == "aurora") {
+            Text("Aurora accent", style = MaterialTheme.typography.titleSmall)
+            Row(horizontalArrangement = Arrangement.spacedBy(14.dp)) {
+                listOf("lime" to Color(0xFFC9FF42), "blue" to Color(0xFF8AB4F8), "coral" to Color(0xFFFF8A80), "violet" to Color(0xFFD0BCFF)).forEach { (name, color) ->
+                    Box(Modifier.size(42.dp).clip(CircleShape).background(color).clickable {
+                        scope.launch { preferences.setAccent(name); preferences.setMonetEnabled(false) }
+                    })
+                }
+            }
+        }
+        Text("Icon shape", style = MaterialTheme.typography.titleSmall)
+        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            listOf("squircle" to "Squircle", "circle" to "Circle", "rounded" to "Round", "square" to "Cut").forEach { (value, label) ->
+                if (settings.iconShape == value) Button(onClick = {}, enabled = false, modifier = Modifier.weight(1f), contentPadding = PaddingValues(horizontal = 2.dp)) { Text(label, maxLines = 1) }
+                else OutlinedButton(onClick = { scope.launch { preferences.setIconShape(value) } }, modifier = Modifier.weight(1f), contentPadding = PaddingValues(horizontal = 2.dp)) { Text(label, maxLines = 1) }
             }
         }
         Row(verticalAlignment = Alignment.CenterVertically) {
