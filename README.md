@@ -1,47 +1,47 @@
 # Haven Launcher
 
-A premium, lightweight Android launcher built with Material 3 Expressive principles. Haven is designed to feel considered and responsive on everyday Android hardware, including low-end devices.
+Haven is an Android home-screen project combining the restrained hardware-led visual language of Nothing OS with the useful, familiar foundations of Pixel Launcher. It is built with Kotlin, Jetpack Compose and Material 3, with Android Monet wallpaper colours on supported devices.
 
-> **Status:** Early MVP scaffold. Not ready to replace a daily-use launcher yet.
+## MVP features
 
-## MVP scope
+- HOME role entry point and a normal app-drawer launch entry.
+- Native home surface with clock, date, frequent apps and app-drawer entry.
+- App drawer with live name filtering and configurable 3–6 column grid.
+- Launch installed apps through their resolved launcher activities.
+- Android 12+ Monet dynamic light/dark colour schemes, with a custom palette fallback.
+- System, light and dark appearance modes.
+- Accent selection, app-label visibility and persisted preferences using DataStore.
+- Swipe-up drawer gesture and system back handling.
+- Adaptive launcher icon.
 
-- Native Android launcher entry point (HOME activity).
-- App discovery through launcher activities exposed by `PackageManager`.
-- Simple home surface with a clock and launchable app list.
-- Native Compose UI with Material 3 foundations and an expressive design direction.
-- A clear boundary for future optional web-based customization. The home screen and app drawer will remain native.
+## Stack
 
-## Technology
-
-- Kotlin
-- Jetpack Compose
-- Material 3
-- Android Gradle Plugin / Gradle Kotlin DSL
-- Minimum Android API 26 (Android 8.0)
+- Kotlin + Jetpack Compose
+- Material 3 components and expressive layout principles
+- DataStore Preferences
+- Minimum Android API 26; Monet dynamic colours on API 31+
+- Compile SDK 36; target SDK 35
 
 ## Build
 
-Open the project in a current stable Android Studio installation and let Gradle sync. The Android SDK and a compatible JDK 17 installation are required.
+Open the repository in Android Studio with JDK 17 and Android SDK 36 installed. Sync Gradle and run the `app` configuration. A Gradle wrapper is not committed yet, so Android Studio may prompt to generate one or you can run `gradle wrapper` using a compatible local Gradle installation.
 
-```bash
-./gradlew assembleDebug
-```
+## Performance decisions
 
-The Gradle wrapper is not included in this initial scaffold. Android Studio can generate it, or run `gradle wrapper` with a locally installed Gradle distribution.
+- The home screen and app drawer are native Compose UI; no WebView is in the interaction path.
+- App discovery runs on `Dispatchers.IO` and the drawer uses a lazy grid.
+- The app list is loaded when the launcher enters the foreground, not polled continuously.
+- No background service, network permission, analytics SDK or unnecessary runtime permission is included.
+- App icons are loaded by Android's package manager as needed.
 
-## Design and performance principles
+## Current MVP boundaries
 
-- Keep the launcher surface native; do not put the home screen or app drawer in a WebView.
-- Do package discovery and other potentially blocking work away from the main thread.
-- Avoid polling and unnecessary background services.
-- Keep animation effects restrained and provide a reduced-motion path.
-- Measure memory and frame timing on real 2 GB and 3 GB devices before making performance claims.
+This is a functional foundation, not a feature-complete commercial launcher. Workspace drag-and-drop, folders, user-managed dock pins, widgets, icon-pack support, backup/restore, per-app hiding, gesture customization, wallpaper picker integration and a web-based theme editor remain future work. App usage ranking is not inferred from launch history; the current frequent row uses a deterministic initial selection.
 
-## Current limitations
+## Inspiration
 
-This scaffold is the starting point for the MVP, not a complete launcher. Workspace persistence, drag-and-drop, folders, widgets, icon packs, theme editing, backup/restore, and production-grade animation choreography are not implemented yet.
+Haven takes broad product cues from Nothing OS and Pixel Launcher. It does not use their proprietary assets, icons, source code or branding.
 
 ## License
 
-License has not been selected yet. Do not assume this project is open source under a particular license until one is added.
+No license has been selected. All rights remain with their respective owners until a license is added.
