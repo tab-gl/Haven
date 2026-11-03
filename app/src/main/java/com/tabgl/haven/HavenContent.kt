@@ -1,9 +1,6 @@
 package com.tabgl.haven
 
 import android.content.Intent
-import android.os.Bundle
-import androidx.activity.ComponentActivity
-import androidx.activity.compose.setContent
 import androidx.activity.compose.BackHandler
 import androidx.compose.animation.AnimatedContent
 import androidx.compose.animation.core.spring
@@ -14,6 +11,10 @@ import androidx.compose.animation.slideOutVertically
 import androidx.compose.animation.togetherWith
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.background
+import androidx.compose.animation.animateContentSize
+import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.expandVertically
+import androidx.compose.animation.shrinkVertically
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.gestures.detectVerticalDragGestures
 import androidx.compose.foundation.layout.Arrangement
@@ -53,7 +54,6 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Slider
-import androidx.compose.material3.Surface
 import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.material3.rememberModalBottomSheetState
@@ -61,7 +61,6 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
@@ -83,62 +82,35 @@ import com.tabgl.haven.data.LauncherPreferences
 import com.tabgl.haven.data.LauncherSettings
 import com.tabgl.haven.ui.HavenTheme
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
-import java.text.SimpleDateFormat
-import java.util.Date
-import java.util.Locale
 
-class MainActivity : ComponentActivity() {
-    private lateinit var preferences: LauncherPreferences
-    private val appRepository by lazy { AppRepository(packageManager) }
-    private var foregroundRefresh by mutableIntStateOf(0)
-
-    override fun onCreate(savedInstanceState: Bundle?) {
-        super.onCreate(savedInstanceState)
-        preferences = LauncherPreferences(applicationContext)
-        setContent {
-            val settings by preferences.settings.collectAsState(initial = LauncherSettings())
-            HavenTheme(settings) {
-                HavenApp(
-                    settings = settings,
-                    preferences = preferences,
-                    refreshToken = foregroundRefresh,
-                    loadApps = { withContext(Dispatchers.IO) { appRepository.loadApps() } },
-                    launchApp = ::launchApp
-                )
-            }
-        }
-    }
-
-    override fun onResume() {
-        super.onResume()
-        if (::preferences.isInitialized) {
-            foregroundRefresh++
-            window.statusBarColor = android.graphics.Color.TRANSPARENT
-            window.navigationBarColor = android.graphics.Color.TRANSPARENT
-            if (android.os.Build.VERSION.SDK_INT >= 29) {
-                window.isNavigationBarContrastEnforced = false
-                window.isStatusBarContrastEnforced = false
-            }
-        }
-    }
-
-    private fun launchApp(app: LauncherApp) {
+@OptIn(ExperimentalFoundationApi::class)
+@Composable
+fun HavenRoot() {
+    val context = LocalContext.current
+    val preferences = remember(context) { LauncherPreferences(context) }
+    val appRepository = remember(context) { AppRepository(context.packageManager) }
+    val settings by preferences.settings.collectAsState(initial = LauncherSettings())
+    val loadApps: suspend () -> List<LauncherApp> = { withContext(Dispatchers.IO) { appRepository.loadApps() } }
+    val launchApp: (LauncherApp) -> Unit = { app ->
         val intent = Intent(Intent.ACTION_MAIN).apply {
             addCategory(Intent.CATEGORY_LAUNCHER)
             setClassName(app.packageName, app.activityName)
             addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
         }
-        runCatching { startActivity(intent) }
+        runCatching { context.startActivity(intent) }
+    }
+    HavenTheme(settings) {
+        HavenAppContent(settings, preferences, loadApps, launchApp)
     }
 }
 
 @OptIn(ExperimentalFoundationApi::class)
 @Composable
-private fun HavenApp(
+private fun HavenAppContent(
     settings: LauncherSettings,
     preferences: LauncherPreferences,
-    refreshToken: Int,
     loadApps: suspend () -> List<LauncherApp>,
     launchApp: (LauncherApp) -> Unit
 ) {
@@ -146,18 +118,7 @@ private fun HavenApp(
     var drawerOpen by remember { mutableStateOf(false) }
     var settingsOpen by remember { mutableStateOf(false) }
     var search by remember { mutableStateOf("") }
-    var clock by remember { mutableStateOf(timeNow()) }
-    var date by remember { mutableStateOf(dateNow()) }
-
-    LaunchedEffect(refreshToken) { apps = loadApps() }
-    LaunchedEffect(Unit) {
-        while (true) {
-            val now = System.currentTimeMillis()
-            clock = timeNow()
-            date = dateNow()
-            kotlinx.coroutines.delay(60_000L - (now % 60_000L))
-        }
-    }
+    LaunchedEffect(Unit) { apps = loadApps() }
 
     BackHandler(drawerOpen || settingsOpen) {
         if (settingsOpen) settingsOpen = false else { drawerOpen = false; search = "" }
@@ -170,6 +131,7 @@ private fun HavenApp(
 
     Box(
         modifier = Modifier.fillMaxSize()
+            .animateContentSize(spring(stiffness = 420f))
             .background(MaterialTheme.colorScheme.background)
             .pointerInput(drawerOpen) {
                 var distance = 0f
@@ -200,8 +162,10 @@ private fun HavenApp(
                 }
             }
             Spacer(Modifier.height(38.dp))
-            Text(clock, fontSize = 68.sp, lineHeight = 72.sp, fontWeight = FontWeight.Light, letterSpacing = (-4).sp, color = MaterialTheme.colorScheme.onBackground)
-            Text(date, style = MaterialTheme.typography.titleMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
+            AndroidView(
+                factory = { HavenClockView(it) },
+                modifier = Modifier.fillMaxWidth().height(112.dp)
+            )
             Spacer(Modifier.height(30.dp))
             Row(verticalAlignment = Alignment.CenterVertically) {
                 Text("FREQUENT", style = MaterialTheme.typography.labelMedium, letterSpacing = 1.6.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
@@ -311,6 +275,9 @@ private fun AppDrawer(
             )
             if (query.isNotEmpty()) IconButton(onClick = { onQuery("") }) { Icon(Icons.Rounded.Close, contentDescription = "Clear search") }
         }
+        AnimatedVisibility(visible = query.isNotBlank(), enter = expandVertically() + fadeIn(), exit = shrinkVertically() + fadeOut()) {
+            Text("${apps.size} matching apps", style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.primary, modifier = Modifier.padding(bottom = 10.dp))
+        }
         Spacer(Modifier.height(18.dp))
         LazyVerticalGrid(
             columns = GridCells.Fixed(columns), modifier = Modifier.weight(1f),
@@ -393,5 +360,4 @@ private fun SettingsPanel(settings: LauncherSettings, preferences: LauncherPrefe
     }
 }
 
-private fun timeNow(): String = SimpleDateFormat("HH:mm", Locale.getDefault()).format(Date())
-private fun dateNow(): String = SimpleDateFormat("EEEE, d MMMM", Locale.getDefault()).format(Date())
+
