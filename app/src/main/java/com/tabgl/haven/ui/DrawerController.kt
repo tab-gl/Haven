@@ -34,6 +34,12 @@ class DrawerController(private val scope: CoroutineScope) {
         progress = (progress + delta).coerceIn(0f, 1f)
     }
 
+    /** Jumps without animating — used when an app launch takes over the screen. */
+    fun snapTo(value: Float) {
+        job?.cancel()
+        progress = value.coerceIn(0f, 1f)
+    }
+
     fun open(focusSearch: Boolean = false) {
         autoFocusSearch = focusSearch
         animateTo(1f, 0f)
@@ -68,18 +74,15 @@ class DrawerController(private val scope: CoroutineScope) {
         }
     }
 
-    /** Lets a scrolling list inside the drawer hand over-scroll to the drawer (pull down to close). */
+    /**
+     * Lets a scrolling list inside the drawer hand over-scroll to the drawer (pull down to close).
+     *
+     * Only *unconsumed* downward scroll is taken. The old implementation also grabbed upward
+     * scroll before the grid saw it, which made the top of the list feel stuck.
+     */
     fun connection(heightPx: () -> Float): NestedScrollConnection = object : NestedScrollConnection {
-        override fun onPreScroll(available: Offset, source: NestedScrollSource): Offset {
-            if (available.y < 0f && progress in 0.001f..0.999f) {
-                dragBy(-available.y / heightPx())
-                return Offset(0f, available.y)
-            }
-            return Offset.Zero
-        }
-
         override fun onPostScroll(consumed: Offset, available: Offset, source: NestedScrollSource): Offset {
-            if (available.y > 0f && source == NestedScrollSource.UserInput) {
+            if (available.y > 0f) {
                 dragBy(-available.y / heightPx())
                 return Offset(0f, available.y)
             }

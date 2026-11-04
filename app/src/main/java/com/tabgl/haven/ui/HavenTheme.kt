@@ -60,17 +60,24 @@ private fun palette(name: String): HavenPalette = when (name) {
     )
 }
 
-/** Accent colours for the Aurora palette. */
-fun accentColor(name: String): Color = when (name) {
+/** The lime Haven has always used as its signature accent. */
+private val ACCENT_LIME = Color(0xFFC9FF42)
+
+/**
+ * A named accent colour, or null for "auto" — follow the palette instead. Accents now apply to
+ * every palette, not just Aurora.
+ */
+fun accentColor(name: String): Color? = when (name) {
+    "lime" -> ACCENT_LIME
     "blue" -> Color(0xFF8AB4F8)
     "coral" -> Color(0xFFFF8A80)
     "violet" -> Color(0xFFD0BCFF)
-    else -> Color(0xFFC9FF42)
+    else -> null
 }
 
 /** Preview swatch used by the settings palette chips. */
 fun paletteSwatch(name: String): Color =
-    if (name == "aurora") accentColor("lime") else palette(name).primary
+    if (name == "aurora") ACCENT_LIME else palette(name).primary
 
 private val HavenShapes = Shapes(
     extraSmall = RoundedCornerShape(10.dp),
@@ -80,22 +87,44 @@ private val HavenShapes = Shapes(
     extraLarge = RoundedCornerShape(40.dp)
 )
 
-/** Picks an accent that stays readable as text/controls on the current background. */
+/**
+ * Picks an accent that stays readable as text and controls on the current background.
+ *
+ * An explicitly chosen accent wins on every palette; "auto" keeps Aurora's lime signature and
+ * lets the other palettes speak for themselves.
+ */
 private fun primaryFor(settings: LauncherSettings, p: HavenPalette, dark: Boolean): Color {
-    if (settings.palette == "aurora") {
-        val accent = accentColor(settings.accent)
-        return if (dark) accent else lerp(accent, Color.Black, 0.55f)
+    val explicit = accentColor(settings.accent)
+    if (explicit != null) return if (dark) explicit else lerp(explicit, Color.Black, 0.55f)
+    val signature = settings.palette == "aurora"
+    val base = if (signature) ACCENT_LIME else p.primary
+    return when {
+        dark && signature -> base
+        dark -> lerp(base, Color.White, 0.5f)
+        signature -> lerp(base, Color.Black, 0.55f)
+        else -> base
     }
-    return if (dark) lerp(p.primary, Color.White, 0.5f) else p.primary
 }
 
 private fun readableOn(color: Color): Color =
     if (color.luminance() > 0.5f) Color(0xFF101410) else Color.White
 
-private fun havenScheme(p: HavenPalette, dark: Boolean, primary: Color): ColorScheme {
-    val bg = if (dark) p.darkBackground else p.lightBackground
-    val surface = if (dark) p.darkSurface else p.lightSurface
-    val variant = if (dark) p.darkVariant else p.lightVariant
+private fun havenScheme(p: HavenPalette, dark: Boolean, primary: Color, amoled: Boolean): ColorScheme {
+    val bg = when {
+        dark && amoled -> Color.Black
+        dark -> p.darkBackground
+        else -> p.lightBackground
+    }
+    val surface = when {
+        dark && amoled -> Color(0xFF08090A)
+        dark -> p.darkSurface
+        else -> p.lightSurface
+    }
+    val variant = when {
+        dark && amoled -> Color(0xFF1B1D1F)
+        dark -> p.darkVariant
+        else -> p.lightVariant
+    }
     val onSurface = if (dark) Color(0xFFE5E2DC) else Color(0xFF191C18)
     val onVariant = if (dark) Color(0xFFBEC8C4) else Color(0xFF454A43)
     val base = if (dark) darkColorScheme() else lightColorScheme()
@@ -144,7 +173,7 @@ fun HavenTheme(settings: LauncherSettings, content: @Composable () -> Unit) {
         dynamic -> dynamicLightColorScheme(context)
         else -> {
             val p = palette(settings.palette)
-            havenScheme(p, dark, primaryFor(settings, p, dark))
+            havenScheme(p, dark, primaryFor(settings, p, dark), settings.amoled)
         }
     }
     val scheme = target.copy(

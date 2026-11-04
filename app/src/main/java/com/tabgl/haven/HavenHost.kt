@@ -37,7 +37,10 @@ import androidx.compose.ui.input.nestedscroll.nestedScroll
 import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.platform.ComposeView
 import androidx.compose.ui.platform.LocalContext
+import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.compose.LifecycleEventEffect
 import com.tabgl.haven.data.AppRepository
+import com.tabgl.haven.data.DockPlanner
 import com.tabgl.haven.data.IconCache
 import com.tabgl.haven.data.LauncherApp
 import com.tabgl.haven.data.LauncherPreferences
@@ -47,8 +50,11 @@ import com.tabgl.haven.ui.AppDrawer
 import com.tabgl.haven.ui.DrawerController
 import com.tabgl.haven.ui.HavenTheme
 import com.tabgl.haven.ui.HomeScreen
+import com.tabgl.haven.ui.LaunchZoom
 import com.tabgl.haven.ui.LocalIconCache
 import com.tabgl.haven.ui.SettingsSheet
+import com.tabgl.haven.ui.motionSpecFor
+import com.tabgl.haven.ui.surfaceZoom
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.collectLatest
@@ -70,8 +76,6 @@ object HavenSignals {
     }
 }
 
-private const val DOCK_SIZE = 4
-
 @Composable
 private fun HavenRoot() {
     val activityContext = LocalContext.current
@@ -87,8 +91,12 @@ private fun HavenRoot() {
     LaunchedEffect(repository) {
         apps = withContext(Dispatchers.IO) { repository.loadApps() }
         defaultDock = withContext(Dispatchers.IO) { repository.defaultDockPackages() }
-        repository.changes().collectLatest {
-            delay(300)
+        repository.changes().collectLatest { changed ->
+            delay(250)
+            // Icons of an updated or reinstalled package are stale: drop them so they re-decode.
+            if (changed.isNotEmpty()) {
+                withContext(Dispatchers.IO) { changed.forEach(iconCache::invalidatePackage) }
+            }
             apps = withContext(Dispatchers.IO) { repository.loadApps() }
             defaultDock = withContext(Dispatchers.IO) { repository.defaultDockPackages() }
         }
@@ -112,32 +120,51 @@ private fun HavenScreen(
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
     val drawer = remember { DrawerController(scope) }
+    val zoom = remember { LaunchZoom(scope) }
+    val motion = remember(settings.animations, settings.motionStyle, settings.motionSpeed) {
+        motionSpecFor(settings)
+    }
     var settingsOpen by remember { mutableStateOf(false) }
     var heightPx by remember { mutableFloatStateOf(1f) }
 
     val visible = remember(apps, settings.hidden) { apps.filterNot { it.key in settings.hidden } }
     val hiddenApps = remember(apps, settings.hidden) { apps.filter { it.key in settings.hidden } }
-    val dock = remember(visible, settings.pinned, defaultDock) { buildDock(visible, settings.pinned, defaultDock) }
+    val dock = remember(visible, settings.pinned, defaultDock, settings.dockSlots, settings.usage) {
+        DockPlanner.dock(visible, settings.pinned, defaultDock, settings.dockSlots, settings.usage)
+    }
     val dockKeys = remember(dock) { dock.mapTo(HashSet<String>()) { it.key } }
-    val frequent = remember(visible, settings.usage, dock) { buildFrequent(visible, settings.usage, dockKeys) }
+    val frequent = remember(visible, settings.usage, dockKeys, settings.frequentCount, settings.showFrequent) {
+        DockPlanner.frequent(
+            visible = visible,
+            usage = settings.usage,
+            excluded = dockKeys,
+            count = if (settings.showFrequent) settings.frequentCount else 0
+        )
+    }
     val currentDockKeys by rememberUpdatedState(dock.map { it.key })
+    val dockSlots = settings.dockSlots
 
-    val actions = remember(context, preferences, scope, drawer) {
+    val actions = remember(context, preferences, scope, drawer, zoom, motion, dockSlots) {
         AppActions(
-            launch = { app ->
-                val intent = Intent(Intent.ACTION_MAIN)
-                    .addCategory(Intent.CATEGORY_LAUNCHER)
-                    .setClassName(app.packageName, app.activityName)
-                    .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_RESET_TASK_IF_NEEDED)
-                if (runCatching { context.startActivity(intent) }.isSuccess) {
-                    scope.launch { preferences.recordLaunch(app.key) }
+            launch = { app, origin ->
+                // iOS-style open: the launcher zooms into the icon, then the app takes over.
+                zoom.open(origin, motion) {
+                    val intent = Intent(Intent.ACTION_MAIN)
+                        .addCategory(Intent.CATEGORY_LAUNCHER)
+                        .setClassName(app.packageName, app.activityName)
+                        .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_RESET_TASK_IF_NEEDED)
+                    val started = runCatching { context.startActivity(intent) }.isSuccess
+                    if (started) scope.launch { preferences.recordLaunch(app.key) }
+                    started
                 }
-                drawer.close()
             },
             info = { app ->
                 openSystemScreen(
                     context,
-                    Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS, Uri.fromParts("package", app.packageName, null))
+                    Intent(
+                        Settings.ACTION_APPLICATION_DETAILS_SETTINGS,
+                        Uri.fromParts("package", app.packageName, null)
+                    )
                 )
             },
             uninstall = { app ->
@@ -145,7 +172,11 @@ private fun HavenScreen(
             },
             togglePin = { app ->
                 val current = currentDockKeys
-                val next = if (app.key in current) current - app.key else (current + app.key).takeLast(DOCK_SIZE)
+                val next = if (app.key in current) {
+                    current - app.key
+                } else {
+                    (current + app.key).takeLast(dockSlots)
+                }
                 scope.launch { preferences.setPinned(next) }
             },
             hide = { app -> scope.launch { preferences.hide(app.key) } }
@@ -153,6 +184,13 @@ private fun HavenScreen(
     }
 
     val drawerVisible by remember { derivedStateOf { drawer.progress > 0.001f } }
+
+    // Coming back from an app: collapse whatever was open and play the close transition.
+    LifecycleEventEffect(Lifecycle.Event.ON_RESUME) {
+        if (settingsOpen) settingsOpen = false
+        if (drawer.progress > 0f) drawer.snapTo(0f)
+        if (zoom.progress > 0f) zoom.settleBack(motion)
+    }
 
     val homeTick = HavenSignals.homeTick
     LaunchedEffect(homeTick) {
@@ -167,54 +205,64 @@ private fun HavenScreen(
         if (settingsOpen) settingsOpen = false else if (drawerVisible) drawer.close()
     }
 
-    val scrim = MaterialTheme.colorScheme.background.copy(alpha = if (settings.showWallpaper) 0.5f else 1f)
+    val dim = settings.wallpaperDim / 100f
+    val background = MaterialTheme.colorScheme.background
+    val scrim = if (settings.showWallpaper) background.copy(alpha = dim) else background
+
     Box(
         Modifier
             .fillMaxSize()
             .background(scrim)
             .onSizeChanged { heightPx = it.height.toFloat().coerceAtLeast(1f) }
     ) {
-        HomeScreen(
-            settings = settings,
-            dock = dock,
-            frequent = frequent,
-            appCount = visible.size,
-            actions = actions,
-            onOpenDrawer = { focusSearch -> drawer.open(focusSearch) },
-            onOpenSettings = { settingsOpen = true },
-            modifier = Modifier
-                .fillMaxSize()
-                .graphicsLayer {
-                    val p = drawer.progress
-                    alpha = 1f - p
-                    scaleX = 1f - 0.04f * p
-                    scaleY = 1f - 0.04f * p
-                }
-                .draggable(
-                    orientation = Orientation.Vertical,
-                    state = rememberDraggableState { delta -> drawer.dragBy(-delta / heightPx) },
-                    onDragStopped = { velocity -> drawer.settle(-velocity / heightPx) }
-                )
-        )
-
-        if (drawerVisible) {
-            AppDrawer(
-                apps = visible,
+        // Home and drawer share one zoom layer so the transition works from either surface.
+        Box(Modifier.fillMaxSize().surfaceZoom(zoom, motion)) {
+            HomeScreen(
                 settings = settings,
-                dockKeys = dockKeys,
+                dock = dock,
+                frequent = frequent,
+                appCount = visible.size,
                 actions = actions,
-                autoFocusSearch = drawer.autoFocusSearch,
-                onClose = { drawer.close() },
+                onOpenDrawer = { focusSearch -> drawer.open(focusSearch) },
+                onOpenSettings = { settingsOpen = true },
                 modifier = Modifier
                     .fillMaxSize()
-                    .clipToBounds()
                     .graphicsLayer {
                         val p = drawer.progress
-                        alpha = p
-                        translationY = (1f - p) * size.height * 0.1f
+                        alpha = 1f - p
+                        scaleX = 1f - 0.04f * p
+                        scaleY = 1f - 0.04f * p
                     }
-                    .nestedScroll(remember(drawer) { drawer.connection { heightPx } })
+                    .draggable(
+                        orientation = Orientation.Vertical,
+                        state = rememberDraggableState { delta -> drawer.dragBy(-delta / heightPx) },
+                        onDragStopped = { velocity -> drawer.settle(-velocity / heightPx) }
+                    )
             )
+
+            if (drawerVisible) {
+                AppDrawer(
+                    apps = visible,
+                    settings = settings,
+                    dockKeys = dockKeys,
+                    actions = actions,
+                    autoFocusSearch = drawer.autoFocusSearch,
+                    onClose = { drawer.close() },
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .clipToBounds()
+                        .graphicsLayer {
+                            val p = drawer.progress
+                            alpha = p
+                            translationY = (1f - p) * size.height * 0.1f
+                            // A whisper of scale makes the drawer feel like a sheet, not a slab.
+                            val s = 0.96f + 0.04f * p
+                            scaleX = s
+                            scaleY = s
+                        }
+                        .nestedScroll(remember(drawer) { drawer.connection { heightPx } })
+                )
+            }
         }
     }
 
@@ -227,31 +275,6 @@ private fun HavenScreen(
         }
     }
 }
-
-private fun buildDock(visible: List<LauncherApp>, pinned: List<String>?, defaults: List<String>): List<LauncherApp> {
-    if (pinned != null) {
-        val byKey = visible.associateBy { it.key }
-        return pinned.mapNotNull { byKey[it] }.take(DOCK_SIZE)
-    }
-    val out = ArrayList<LauncherApp>(DOCK_SIZE)
-    for (pkg in defaults) {
-        val match = visible.firstOrNull { it.packageName == pkg }
-        if (match != null && match !in out) out.add(match)
-        if (out.size == DOCK_SIZE) break
-    }
-    return out
-}
-
-private fun buildFrequent(
-    visible: List<LauncherApp>,
-    usage: Map<String, Int>,
-    dockKeys: Set<String>
-): List<LauncherApp> =
-    visible.asSequence()
-        .filter { it.key !in dockKeys && (usage[it.key] ?: 0) > 0 }
-        .sortedByDescending { usage[it.key] ?: 0 }
-        .take(4)
-        .toList()
 
 private fun openSystemScreen(context: Context, intent: Intent) {
     runCatching { context.startActivity(intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)) }

@@ -3,7 +3,7 @@
 Haven is a lightweight Android launcher that pairs Material 3 colour and expressive-style rounded shapes with spring motion and a restrained, Nothing-style layout. It is built to stay smooth on low-end (1–3 GB RAM) devices.
 
 - **Application ID:** `app.tab.home`
-- **Version:** 0.5.0
+- **Version:** 0.6.0
 - **Minimum Android:** 8.0 (API 26) · **ABIs:** `armeabi-v7a`, `arm64-v8a`
 - **Stack:** Java host (activity + native clock) with Kotlin/Compose UI
 
@@ -15,15 +15,33 @@ Haven is a lightweight Android launcher that pairs Material 3 colour and express
 - Interactive swipe-up drawer that follows your finger, with spring settle; pull down at the top of the list to close
 - Search: prefix, word, initials and fuzzy matching; Enter launches the top hit; web-search fallback
 - Long-press menu: pin, hide, app info, uninstall
-- Hidden apps (restore from settings), icon shapes, compact icons, 3–6 columns, labels on/off
-- Light/dark/system, Monet dynamic colour on Android 12+, five palettes with accessible contrast
 - Live app list: updates when apps are installed, removed, updated or the language changes
-- Material 3 theme with large rounded shapes and spring-driven motion (the official Expressive theme APIs need a newer Material3 than the pinned 1.4.0)
+
+### Motion
+
+- **iOS-style open:** the launcher zooms out of the icon you tapped and fades as the app takes over, then springs back in when you return — the app appears to grow from, and collapse into, its icon.
+- **Press feedback:** icons dip and spring back on touch instead of flashing a ripple.
+- Three styles (Zoom / Fade / Off), three speeds (Fast / Normal / Calm) and a master switch, so motion can be turned off entirely for accessibility or battery.
+
+### Customisation
+
+Everything below is live-previewed in the settings sheet (long-press the home screen or tap the tune icon).
+
+| Group | Options |
+| --- | --- |
+| Appearance | System/Light/Dark · pure-black (AMOLED) · Monet dynamic colour · five palettes · accent colour (auto, lime, blue, coral, violet) on **every** palette |
+| Wallpaper | show/hide · dim 0–85% |
+| Home screen | Haven wordmark · clock on/off and size · search pill |
+| Dock & Frequent | dock slots 3–5 · dock background · Frequent row on/off and 0–5 slots |
+| Icons & grid | four icon shapes · three icon sizes · labels on/off · 1–2 label lines · 3–6 drawer columns |
+| Drawer | opacity 60–100% · web-search engine (Google, DuckDuckGo, Brave) |
+| Motion | animations on/off · Zoom/Fade/Off · Fast/Normal/Calm · haptics |
+| Also | hidden-apps manager, one-tap reset to defaults |
 
 ## Why it stays light
 
-- Icons decode off the main thread, two at a time, at the exact drawn size, into a memory-class-bounded LRU
-- Drawer/home animation reads progress only in `graphicsLayer` (no per-frame recomposition)
+- Icons decode off the main thread, two at a time, at the exact drawn size, into a memory-class-bounded LRU; a package update evicts only that package's icons
+- Drawer, home and the launch transition read their progress only in `graphicsLayer` (no per-frame recomposition)
 - The clock is a native `TextClock`; no recomposition while idle
 - No `material-icons-extended` (hand-drawn stroke icons instead); R8 + resource shrinking in release
 - `profileinstaller` applies the baseline profiles that ship inside Compose on first run
@@ -36,4 +54,6 @@ Locally: JDK 17, Android SDK 36, Gradle 8.13 — `gradle :app:testDebugUnitTest 
 
 ## Not yet built
 
-Widgets, free-form workspace/drag-and-drop, folders, icon packs, backup/restore, gesture editor. Device profiling on 2 GB hardware is still required before claiming performance numbers.
+Widgets, free-form workspace/drag-and-drop, folders, icon packs, themed (monochrome) icons, backup/restore, gesture editor. Device profiling on 2 GB hardware is still required before claiming performance numbers.
+
+See [`docs/AUDIT.md`](docs/AUDIT.md) for the 0.6.0 review and [`docs/MVP.md`](docs/MVP.md) for status.

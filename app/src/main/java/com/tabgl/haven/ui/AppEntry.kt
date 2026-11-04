@@ -1,7 +1,11 @@
 package com.tabgl.haven.ui
 
+import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.animation.core.spring
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.combinedClickable
+import androidx.compose.foundation.interaction.MutableInteractionSource
+import androidx.compose.foundation.interaction.collectIsPressedAsState
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -21,8 +25,13 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.hapticfeedback.HapticFeedbackType
+import androidx.compose.ui.layout.onGloballyPositioned
+import androidx.compose.ui.layout.positionInWindow
 import androidx.compose.ui.platform.LocalHapticFeedback
+import androidx.compose.ui.platform.LocalView
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.style.TextAlign
@@ -31,10 +40,15 @@ import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import com.tabgl.haven.data.LauncherApp
 
-/** Everything an app tile can do. Built once at the root so tiles stay cheap and skippable. */
+/**
+ * Everything an app tile can do. Built once at the root so tiles stay cheap and skippable.
+ *
+ * [launch] also receives where the icon was tapped, so the open transition can grow out of that
+ * exact point on screen.
+ */
 @Stable
 class AppActions(
-    val launch: (LauncherApp) -> Unit,
+    val launch: (LauncherApp, ZoomOrigin?) -> Unit,
     val info: (LauncherApp) -> Unit,
     val uninstall: (LauncherApp) -> Unit,
     val togglePin: (LauncherApp) -> Unit,
@@ -52,19 +66,45 @@ fun AppEntry(
     inDock: Boolean,
     actions: AppActions,
     modifier: Modifier = Modifier,
-    labelLines: Int = 1
+    labelLines: Int = 1,
+    haptics: Boolean = true
 ) {
     var menuOpen by remember { mutableStateOf(false) }
     val haptic = LocalHapticFeedback.current
+    val view = LocalView.current
+    val interaction = remember { MutableInteractionSource() }
+    val pressed by interaction.collectIsPressedAsState()
+
+    // iOS-style press: the tile dips and springs back instead of flashing a ripple.
+    val pressScale by animateFloatAsState(
+        targetValue = if (pressed) 0.90f else 1f,
+        animationSpec = spring(dampingRatio = 0.55f, stiffness = 1100f),
+        label = "haven-press"
+    )
+
+    var centerInWindow by remember { mutableStateOf(Offset.Zero) }
+
     Box(modifier) {
         Column(
             Modifier
                 .fillMaxWidth()
                 .clip(RoundedCornerShape(20.dp))
+                .onGloballyPositioned { coordinates ->
+                    val position = coordinates.positionInWindow()
+                    val size = coordinates.size
+                    centerInWindow = Offset(
+                        position.x + size.width / 2f,
+                        position.y + size.height / 2f
+                    )
+                }
                 .combinedClickable(
-                    onClick = { actions.launch(app) },
+                    interactionSource = interaction,
+                    indication = null,
+                    onClick = {
+                        actions.launch(app, ZoomOrigin.of(centerInWindow, view.width, view.height))
+                    },
                     onLongClick = {
-                        haptic.performHapticFeedback(HapticFeedbackType.LongPress)
+                        if (haptics) haptic.performHapticFeedback(HapticFeedbackType.LongPress)
                         menuOpen = true
                     }
                 )
@@ -73,7 +113,15 @@ fun AppEntry(
             horizontalAlignment = Alignment.CenterHorizontally,
             verticalArrangement = Arrangement.spacedBy(7.dp)
         ) {
-            AppIcon(app, iconSize, shapeName)
+            AppIcon(
+                app = app,
+                size = iconSize,
+                shapeName = shapeName,
+                modifier = Modifier.graphicsLayer {
+                    scaleX = pressScale
+                    scaleY = pressScale
+                }
+            )
             if (showLabel) {
                 Text(
                     app.label,

@@ -46,6 +46,12 @@ public final class HavenClockView extends LinearLayout {
         setColors(0xFFE5E2DC, 0xFFBEC8C4);
     }
 
+    /** Applies the clock-size setting, in sp. */
+    public void setTextSizes(float timeSp, float dateSp) {
+        time.setTextSize(TypedValue.COMPLEX_UNIT_SP, timeSp);
+        date.setTextSize(TypedValue.COMPLEX_UNIT_SP, dateSp);
+    }
+
     /** Applies the launcher theme's colours (ARGB ints) to the time and date text. */
     public void setColors(int primary, int secondary) {
         time.setTextColor(primary);

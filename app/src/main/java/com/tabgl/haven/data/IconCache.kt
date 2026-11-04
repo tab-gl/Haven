@@ -49,6 +49,14 @@ class IconCache(context: Context) {
 
     fun clear() = cache.evictAll()
 
+    /** Drops every cached size for one package — an update or reinstall changes its icon. */
+    fun invalidatePackage(packageName: String) {
+        val prefix = "$packageName/"
+        for (key in cache.snapshot().keys) {
+            if (key.startsWith(prefix)) cache.remove(key)
+        }
+    }
+
     private fun render(app: LauncherApp, px: Int): ImageBitmap? = try {
         val drawable = packageManager.getActivityIcon(ComponentName(app.packageName, app.activityName))
         toBitmap(drawable, px).asImageBitmap()

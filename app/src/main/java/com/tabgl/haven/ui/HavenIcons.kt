@@ -15,6 +15,8 @@ object HavenIcons {
     }
     val Close: ImageVector by lazy { stroke("Close", "M6,6L18,18M18,6L6,18") }
     val Back: ImageVector by lazy { stroke("Back", "M19,12L5,12M11,6L5,12L11,18") }
+    val Plus: ImageVector by lazy { stroke("Plus", "M12,5L12,19M5,12L19,12") }
+    val Minus: ImageVector by lazy { stroke("Minus", "M5,12L19,12") }
     val Tune: ImageVector by lazy {
         stroke(
             "Tune",

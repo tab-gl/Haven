@@ -82,11 +82,12 @@ fun AppDrawer(
     DisposableEffect(Unit) { onDispose { keyboard?.hide() } }
 
     val bottomInset = WindowInsets.navigationBars.asPaddingValues().calculateBottomPadding()
-    val iconSize = if (settings.compactIcons) 42.dp else 52.dp
+    val iconSize = Metrics.drawerIcon(settings.iconScale)
+    val opacity = (settings.drawerOpacity / 100f).coerceIn(0.3f, 1f)
 
     Column(
         modifier
-            .background(colors.background.copy(alpha = if (settings.showWallpaper) 0.94f else 1f))
+            .background(colors.background.copy(alpha = if (settings.showWallpaper) opacity else 1f))
             .statusBarsPadding()
             .imePadding()
             .padding(horizontal = 20.dp)
@@ -119,8 +120,8 @@ fun AppDrawer(
                 keyboardOptions = KeyboardOptions(imeAction = ImeAction.Go),
                 keyboardActions = KeyboardActions(onGo = {
                     val first = results.firstOrNull()
-                    if (first != null) actions.launch(first)
-                    else if (query.isNotBlank()) searchWeb(context, query.trim())
+                    if (first != null) actions.launch(first, null)
+                    else if (query.isNotBlank()) searchWeb(context, query.trim(), settings.searchEngine)
                 }),
                 decorationBox = { inner ->
                     Box {
@@ -151,7 +152,9 @@ fun AppDrawer(
                     color = colors.onSurfaceVariant,
                     textAlign = TextAlign.Center
                 )
-                Button(onClick = { searchWeb(context, query.trim()) }) { Text("Search the web") }
+                Button(onClick = { searchWeb(context, query.trim(), settings.searchEngine) }) {
+                    Text("Search the web")
+                }
             }
         } else {
             LazyVerticalGrid(
@@ -169,7 +172,8 @@ fun AppDrawer(
                         showLabel = settings.showLabels,
                         inDock = app.key in dockKeys,
                         actions = actions,
-                        labelLines = 2
+                        labelLines = settings.labelLines,
+                        haptics = settings.haptics
                     )
                 }
             }
@@ -177,13 +181,20 @@ fun AppDrawer(
     }
 }
 
-private fun searchWeb(context: Context, query: String) {
-    val search = Intent(Intent.ACTION_WEB_SEARCH)
-        .putExtra(SearchManager.QUERY, query)
-        .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
-    if (runCatching { context.startActivity(search) }.isFailure) {
-        val view = Intent(Intent.ACTION_VIEW, Uri.parse("https://www.google.com/search?q=" + Uri.encode(query)))
+/** Web fallback when a search matches no installed app. */
+private fun searchWeb(context: Context, query: String, engine: String) {
+    if (engine == "google") {
+        val search = Intent(Intent.ACTION_WEB_SEARCH)
+            .putExtra(SearchManager.QUERY, query)
             .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
-        runCatching { context.startActivity(view) }
+        if (runCatching { context.startActivity(search) }.isSuccess) return
     }
+    val base = when (engine) {
+        "duckduckgo" -> "https://duckduckgo.com/?q="
+        "brave" -> "https://search.brave.com/search?q="
+        else -> "https://www.google.com/search?q="
+    }
+    val view = Intent(Intent.ACTION_VIEW, Uri.parse(base + Uri.encode(query)))
+        .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+    runCatching { context.startActivity(view) }
 }
