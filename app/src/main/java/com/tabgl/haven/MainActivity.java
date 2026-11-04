@@ -1,14 +1,15 @@
 package com.tabgl.haven;
 
-import android.os.Bundle;
 import android.graphics.Color;
+import android.os.Build;
+import android.os.Bundle;
 import android.view.ViewGroup;
+
 import androidx.activity.ComponentActivity;
-import androidx.compose.runtime.Composer;
 import androidx.compose.ui.platform.ComposeView;
 import androidx.core.view.WindowCompat;
-import kotlin.Unit;
 
+/** HOME activity. Hosts a single Compose surface; all UI lives in Kotlin ({@link HavenHost}). */
 public final class MainActivity extends ComponentActivity {
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -16,7 +17,7 @@ public final class MainActivity extends ComponentActivity {
         WindowCompat.setDecorFitsSystemWindows(getWindow(), false);
         getWindow().setStatusBarColor(Color.TRANSPARENT);
         getWindow().setNavigationBarColor(Color.TRANSPARENT);
-        if (android.os.Build.VERSION.SDK_INT >= 29) {
+        if (Build.VERSION.SDK_INT >= 29) {
             getWindow().setStatusBarContrastEnforced(false);
             getWindow().setNavigationBarContrastEnforced(false);
         }
@@ -26,10 +27,12 @@ public final class MainActivity extends ComponentActivity {
                 ViewGroup.LayoutParams.MATCH_PARENT,
                 ViewGroup.LayoutParams.MATCH_PARENT
         ));
-        content.setContent((Composer composer, Integer changed) -> {
-            HavenContentKt.HavenRoot(composer, changed);
-            return Unit.INSTANCE;
-        });
+        // Composition is set up from Kotlin: calling a @Composable directly from Java skips the
+        // Compose compiler's restart/skip machinery and is unsupported.
+        HavenHost.setHavenContent(content);
         setContentView(content);
+
+        // Singleton HOME: pressing Home again arrives as a new intent. Collapse the drawer/settings.
+        addOnNewIntentListener(intent -> HavenSignals.INSTANCE.onHome());
     }
 }

@@ -1,28 +1,27 @@
-# Haven MVP implementation
+# Haven status
 
-## Included
+## Shipped (0.5.0)
 
-- Launcher HOME activity and app-list entry point.
-- PackageManager-backed app discovery and explicit activity launching.
-- Native Compose home surface and lazy app drawer.
-- Search-as-you-type, configurable grid columns and optional app labels.
-- Swipe-up drawer opening and Android back dismissal.
-- DataStore-persisted appearance and layout settings.
-- Android 12+ Monet dynamic colours with manual accent fallback.
-- Adaptive icon and dark/light/system appearance.
+- HOME activity (`singleTask`), regular launcher entry, Home-press collapses drawer/settings
+- PackageManager discovery keyed per activity, live refresh on package/locale changes
+- Wallpaper-through home, native clock, usage-ranked Frequent row, pin-able dock
+- Finger-following drawer, nested pull-to-close, ranked search with web fallback
+- Long-press menu (pin, hide, app info, uninstall), hidden-apps management
+- DataStore-backed settings, read before first frame (no theme flash)
+- Bounded off-thread icon cache with adaptive-icon re-masking to the chosen shape
+- Material 3 Expressive theme, Monet, five palettes, system-bar icon contrast
+- Unit tests for search ranking and usage encoding; CI runs tests, debug APKs and an R8 release build
 
 ## Deferred
 
-- True usage-ranked favourites and user-managed dock pinning.
-- Workspace placement, folders, drag-and-drop and widget host.
-- Icon packs, per-app hiding, backup/restore and full gesture editor.
-- Optional WebView theme studio. It must remain isolated from the launcher rendering path.
+- Widget host, workspace placement, folders, drag-and-drop
+- Icon packs, themed (monochrome) icons, backup/restore, gesture editor
+- Work-profile apps (needs `LauncherApps`), app shortcuts, notification badges
+- Optional WebView theme studio (must stay out of the render path)
 
-## Validation checklist
+## Device validation checklist
 
-- Build debug and release variants with JDK 17 / SDK 36.
-- Confirm HOME selection and regular launcher icon entry on API 26, 30, 31 and 35.
-- Verify app discovery on Android 11+ package visibility behavior.
-- Verify Monet follows wallpaper palette on API 31+ and manual colours work below API 31.
-- Profile scrolling and drawer animation on 2 GB and 3 GB devices.
-- Test process recreation, missing/uninstalled apps and large app inventories.
+- HOME selection and launch on API 26, 30, 31, 35; Android 11+ package visibility
+- Monet follows wallpaper on API 31+; manual palettes below 31
+- Profile drawer drag and icon scroll on 2 GB and 3 GB devices
+- Process recreation, uninstalled apps, very large app inventories, RTL

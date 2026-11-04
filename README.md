@@ -1,49 +1,39 @@
 # Haven Launcher
 
-Haven is a lightweight Android launcher combining the restrained visual language of Nothing OS with the familiar utility of Pixel Launcher.
+Haven is a lightweight Android launcher that pairs Material 3 Expressive motion and shape with a restrained, Nothing-style layout. It is built to stay smooth on low-end (1–3 GB RAM) devices.
 
 - **Application ID:** `app.tab.home`
-- **Version:** 0.4.0
-- **Languages:** Java + Kotlin
-- **UI architecture:** Native Android Views hosted alongside Jetpack Compose
-- **Minimum Android:** 8.0 (API 26)
-- **Architectures:** `armeabi-v7a` and `arm64-v8a`
-
-## Hybrid architecture
-
-- **Java:** Android `ComponentActivity` host and a platform-native `TextClock`/date view.
-- **Kotlin:** Compose launcher screens, app drawer, settings, app discovery, and preferences.
-- **Interop:** `ComposeView` hosts Compose; Compose `AndroidView` embeds the Java clock and native app icons.
-- **Motion:** Spring-driven drawer transitions, animated search feedback, content-size transitions, and animated theme colors.
-- **Monet:** Android 12+ wallpaper-derived colors in Compose and system Monet color resources in the native clock. Custom accents remain available when Monet is disabled or unavailable.
+- **Version:** 0.5.0
+- **Minimum Android:** 8.0 (API 26) · **ABIs:** `armeabi-v7a`, `arm64-v8a`
+- **Stack:** Java host (activity + native clock) with Kotlin/Compose UI
 
 ## Features
 
-- Minimal home screen with live native clock and date
-- App drawer with live search
-- Installed app icons and launching
-- Swipe-up drawer gesture
-- Monet dynamic colors on Android 12+
-- Light, dark, and system themes
-- Custom accent palettes
-- Adjustable app grid (3–6 columns)
-- Persistent launcher preferences
-- Lazy app grid and background app discovery
+- Wallpaper-through home screen with native, self-ticking clock (tap to open alarms)
+- Real dock: pin/unpin with long-press; defaults to your dialer, messages, camera and browser
+- **Frequent** row ranked by actual launch counts (with decay)
+- Interactive swipe-up drawer that follows your finger, with spring settle; pull down at the top of the list to close
+- Search: prefix, word, initials and fuzzy matching; Enter launches the top hit; web-search fallback
+- Long-press menu: pin, hide, app info, uninstall
+- Hidden apps (restore from settings), icon shapes, compact icons, 3–6 columns, labels on/off
+- Light/dark/system, Monet dynamic colour on Android 12+, five palettes with accessible contrast
+- Live app list: updates when apps are installed, removed, updated or the language changes
+- Material 3 Expressive theme and motion scheme
 
-## Build APKs
+## Why it stays light
 
-GitHub Actions builds separate debug APKs for both ARM architectures on pushes to `main`, pull requests, and manual workflow dispatch.
+- Icons decode off the main thread, two at a time, at the exact drawn size, into a memory-class-bounded LRU
+- Drawer/home animation reads progress only in `graphicsLayer` (no per-frame recomposition)
+- The clock is a native `TextClock`; no recomposition while idle
+- No `material-icons-extended` (hand-drawn stroke icons instead); R8 + resource shrinking in release
+- `profileinstaller` applies the baseline profiles that ship inside Compose on first run
 
-1. Open the repository's **Actions** tab.
-2. Select **Android APKs** and open the latest successful run.
-3. Download `haven-armeabi-v7a-debug` or `haven-arm64-v8a-debug`.
+## Build
 
-The workflow installs Gradle 8.13 directly because this repository does not commit a Gradle wrapper.
+CI (`.github/workflows/android-apk.yml`) runs unit tests, builds both debug APKs and an R8 release build on every push/PR to `main`. Download `haven-armeabi-v7a-debug` or `haven-arm64-v8a-debug` from the run's artifacts.
 
-## Scope
+Locally: JDK 17, Android SDK 36, Gradle 8.13 — `gradle :app:testDebugUnitTest :app:assembleDebug`. (No wrapper is committed; run `gradle wrapper --gradle-version 8.13` once if you want one.)
 
-Widgets, drag-and-drop workspace editing, folders, icon packs, backup/restore, and advanced gesture customization remain future work.
+## Not yet built
 
-## Validation
-
-A successful GitHub Actions run is required before treating the APKs as verified. Device-level animation profiling and low-memory testing remain necessary before claiming performance targets.
+Widgets, free-form workspace/drag-and-drop, folders, icon packs, backup/restore, gesture editor. Device profiling on 2 GB hardware is still required before claiming performance numbers.
