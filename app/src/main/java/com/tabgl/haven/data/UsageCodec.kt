@@ -28,10 +28,14 @@ object UsageCodec {
             if (key !in next) next[key] = 1
         }
         if (next.size > maxEntries) {
-            val keep = next.entries.sortedByDescending { it.value }.take(maxEntries)
+            // Always keep the app just launched; fill the rest with the most-used others.
+            val current = next.getValue(key)
+            val keep = next.entries.filter { it.key != key }
+                .sortedByDescending { it.value }
+                .take(maxEntries - 1)
             next.clear()
             for (e in keep) next[e.key] = e.value
-            if (key !in next) next[key] = 1
+            next[key] = current
         }
         return next
     }
