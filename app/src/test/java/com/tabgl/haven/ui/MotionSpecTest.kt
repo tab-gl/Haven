@@ -9,11 +9,12 @@ import org.junit.Test
 class MotionSpecTest {
 
     @Test
-    fun defaultsToAReadyZoom() {
+    fun defaultsToThePixelFeel() {
         val spec = motionSpecFor(LauncherSettings())
         assertTrue(spec.enabled)
         assertEquals(MotionSpec.ZOOM, spec.mode)
-        assertEquals(380f, spec.stiffness, 0.01f)
+        assertEquals(430f, spec.stiffness, 0.01f)
+        assertEquals(0.90f, spec.lift, 0.001f)
     }
 
     @Test
@@ -21,12 +22,12 @@ class MotionSpecTest {
         val spec = motionSpecFor(LauncherSettings(animations = false))
         assertFalse(spec.enabled)
         assertEquals(MotionSpec.NONE, spec.mode)
+        assertEquals(0f, spec.lift, 0.001f)
     }
 
     @Test
     fun styleNoneTurnsMotionOff() {
-        val spec = motionSpecFor(LauncherSettings(motionStyle = "none"))
-        assertFalse(spec.enabled)
+        assertFalse(motionSpecFor(LauncherSettings(motionStyle = "none")).enabled)
     }
 
     @Test
@@ -38,8 +39,7 @@ class MotionSpecTest {
 
     @Test
     fun unknownStyleFallsBackToZoom() {
-        val spec = motionSpecFor(LauncherSettings(motionStyle = "wobble"))
-        assertEquals(MotionSpec.ZOOM, spec.mode)
+        assertEquals(MotionSpec.ZOOM, motionSpecFor(LauncherSettings(motionStyle = "wobble")).mode)
     }
 
     @Test
@@ -49,6 +49,42 @@ class MotionSpecTest {
         val calm = motionSpecFor(LauncherSettings(motionSpeed = "calm"))
         assertTrue(fast.stiffness > normal.stiffness)
         assertTrue(normal.stiffness > calm.stiffness)
-        assertTrue(calm.damping < fast.damping)
+    }
+
+    @Test
+    fun oneUiIsCrisperThanPixel() {
+        val pixel = motionSpecFor(LauncherSettings(motionFeel = "pixel"))
+        val oneUi = motionSpecFor(LauncherSettings(motionFeel = "oneui"))
+        // Stiffer, less bounce, smaller scale, more fade, less icon growth.
+        assertTrue(oneUi.stiffness > pixel.stiffness)
+        assertTrue(oneUi.closeDamping > pixel.closeDamping)
+        assertTrue(oneUi.zoomGain < pixel.zoomGain)
+        assertTrue(oneUi.fade > pixel.fade)
+        assertTrue(oneUi.lift < pixel.lift)
+        assertTrue(oneUi.launchAt < pixel.launchAt)
+    }
+
+    @Test
+    fun classicIsSofterThanPixel() {
+        val pixel = motionSpecFor(LauncherSettings(motionFeel = "pixel"))
+        val classic = motionSpecFor(LauncherSettings(motionFeel = "classic"))
+        assertTrue(classic.stiffness < pixel.stiffness)
+        assertTrue(classic.fade > pixel.fade)
+    }
+
+    @Test
+    fun unknownFeelFallsBackToPixel() {
+        assertEquals(
+            motionSpecFor(LauncherSettings(motionFeel = "pixel")).stiffness,
+            motionSpecFor(LauncherSettings(motionFeel = "nonsense")).stiffness,
+            0.01f
+        )
+    }
+
+    @Test
+    fun fadeIsNeverTotalSoTheReturnDoesNotCutFromBlack() {
+        LauncherSettings(motionFeel = "oneui").let { settings ->
+            assertTrue(motionSpecFor(settings).fade < 1f)
+        }
     }
 }

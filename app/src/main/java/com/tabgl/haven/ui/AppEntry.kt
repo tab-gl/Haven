@@ -124,7 +124,7 @@ fun AppEntry(
                     // The tapped icon lifts as the launcher zooms past it, so the app looks like it
                     // grows out of that specific tile. Read inside the layer: no recomposition.
                     val lift = if (zoom != null && zoom.launchingKey == app.key) zoom.progress else 0f
-                    val scale = pressScale * (1f + 0.34f * lift)
+                    val scale = pressScale * (1f + (zoom?.lift ?: 0f) * lift)
                     scaleX = scale
                     scaleY = scale
                 }

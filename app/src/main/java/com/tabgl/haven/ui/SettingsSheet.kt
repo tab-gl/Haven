@@ -1,6 +1,12 @@
 package com.tabgl.haven.ui
 
+import android.content.Context
+import android.content.Intent
+import android.net.Uri
 import android.os.Build
+import android.widget.Toast
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -18,6 +24,7 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.verticalScroll
+import androidx.compose.material3.Button
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.FilterChip
 import androidx.compose.material3.HorizontalDivider
@@ -42,13 +49,16 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.unit.dp
+import com.tabgl.haven.data.DeviceSearch
 import com.tabgl.haven.data.LauncherApp
 import com.tabgl.haven.data.LauncherPreferences
 import com.tabgl.haven.data.LauncherSettings
+import com.tabgl.haven.data.Wallpapers
 import kotlin.math.roundToInt
 import kotlinx.coroutines.launch
 
@@ -76,13 +86,41 @@ fun SettingsSheet(
     settings: LauncherSettings,
     hiddenApps: List<LauncherApp>,
     preferences: LauncherPreferences,
-    versionName: String
+    versionName: String,
+    widgetLabels: List<Pair<Int, String>>,
+    onAddWidget: () -> Unit,
+    onRemoveWidget: (Int) -> Unit
 ) {
     val scope = rememberCoroutineScope()
+    val context = LocalContext.current
     val colors = MaterialTheme.colorScheme
     val monetAvailable = Build.VERSION.SDK_INT >= Build.VERSION_CODES.S
     val monetActive = monetAvailable && settings.monetEnabled
     var confirmReset by remember { mutableStateOf(false) }
+
+    val contactPermission = rememberLauncherForActivityResult(
+        ActivityResultContracts.RequestPermission()
+    ) { granted ->
+        scope.launch { preferences.setSearchContacts(granted) }
+        if (!granted) toast(context, "Contact search needs permission")
+    }
+    val filePermissions = rememberLauncherForActivityResult(
+        ActivityResultContracts.RequestMultiplePermissions()
+    ) { result ->
+        val granted = result.values.any { it }
+        scope.launch { preferences.setSearchFiles(granted) }
+        if (!granted) toast(context, "File search needs media permission")
+    }
+    val wallpaperPicker = rememberLauncherForActivityResult(
+        ActivityResultContracts.PickVisualMedia()
+    ) { uri ->
+        if (uri != null) {
+            scope.launch {
+                val ok = Wallpapers.setFromUri(context, uri)
+                toast(context, if (ok) "Home screen wallpaper updated" else "Could not set that image")
+            }
+        }
+    }
 
     Column(
         Modifier
@@ -162,6 +200,29 @@ fun SettingsSheet(
                 label = { "$it%" }
             ) { scope.launch { preferences.setWallpaperDim(it) } }
         }
+
+        SubHeader("Change wallpaper")
+        Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+            Button(
+                onClick = {
+                    wallpaperPicker.launch(
+                        androidx.activity.result.PickVisualMediaRequest(
+                            ActivityResultContracts.PickVisualMedia.ImageOnly
+                        )
+                    )
+                },
+                modifier = Modifier.weight(1f)
+            ) { Text("From gallery") }
+            Button(
+                onClick = { openWallpaperPicker(context) },
+                modifier = Modifier.weight(1f)
+            ) { Text("System") }
+        }
+        Text(
+            "Sets the home screen only, so your lock screen stays put.",
+            style = MaterialTheme.typography.bodySmall,
+            color = colors.onSurfaceVariant
+        )
         SwitchRow(
             title = "Haven wordmark",
             subtitle = "Show the name in the top corner",
@@ -270,6 +331,41 @@ fun SettingsSheet(
 
         Divider()
 
+        // ---- Pages & widgets --------------------------------------------------
+        SectionHeader("Pages and widgets")
+        StepperRow(
+            title = "Home pages",
+            subtitle = "Swipe sideways; widgets live on the page you add them to",
+            value = settings.pages,
+            range = 1..4
+        ) { scope.launch { preferences.setPages(it) } }
+        Text(
+            "Widgets",
+            style = MaterialTheme.typography.titleSmall
+        )
+        Text(
+            "Real Android widgets, hosted on the home screen",
+            style = MaterialTheme.typography.bodySmall,
+            color = colors.onSurfaceVariant
+        )
+        Button(onClick = onAddWidget, modifier = Modifier.fillMaxWidth()) { Text("Add widget") }
+        if (widgetLabels.isEmpty()) {
+            Text(
+                "No widgets added yet.",
+                style = MaterialTheme.typography.bodySmall,
+                color = colors.onSurfaceVariant
+            )
+        } else {
+            widgetLabels.forEach { (id, label) ->
+                Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+                    Text(label, modifier = Modifier.weight(1f), style = MaterialTheme.typography.bodyLarge, maxLines = 1)
+                    TextButton(onClick = { onRemoveWidget(id) }) { Text("Remove") }
+                }
+            }
+        }
+
+        Divider()
+
         // ---- Drawer -----------------------------------------------------------
         SectionHeader("App drawer")
         SliderRow(
@@ -283,6 +379,43 @@ fun SettingsSheet(
             options = listOf("google" to "Google", "duckduckgo" to "DuckDuckGo", "brave" to "Brave"),
             selected = settings.searchEngine
         ) { value -> scope.launch { preferences.setSearchEngine(value) } }
+
+        SubHeader("Search sources")
+        SwitchRow(
+            title = "Calculator",
+            subtitle = "Type 12*7 and the result appears above the apps",
+            checked = settings.searchCalculator,
+            onChange = { scope.launch { preferences.setSearchCalculator(it) } }
+        )
+        SwitchRow(
+            title = "Contacts",
+            subtitle = "Names and numbers from your address book",
+            checked = settings.searchContacts,
+            onChange = { wanted ->
+                if (!wanted) {
+                    scope.launch { preferences.setSearchContacts(false) }
+                } else if (DeviceSearch.contactsGranted(context)) {
+                    scope.launch { preferences.setSearchContacts(true) }
+                } else {
+                    contactPermission.launch(android.Manifest.permission.READ_CONTACTS)
+                }
+            }
+        )
+        SwitchRow(
+            title = "Files",
+            subtitle = "Photos, videos and audio by name",
+            checked = settings.searchFiles,
+            onChange = { wanted ->
+                if (!wanted) {
+                    scope.launch { preferences.setSearchFiles(false) }
+                } else if (DeviceSearch.filesGranted(context)) {
+                    scope.launch { preferences.setSearchFiles(true) }
+                } else {
+                    filePermissions.launch(DeviceSearch.filePermissions())
+                }
+            }
+        )
+
 
         Divider()
 
@@ -300,6 +433,20 @@ fun SettingsSheet(
                 options = listOf("zoom" to "Zoom", "fade" to "Fade", "none" to "Off"),
                 selected = settings.motionStyle
             ) { value -> scope.launch { preferences.setMotionStyle(value) } }
+            SubHeader("Feel")
+            Segmented(
+                options = listOf("pixel" to "Pixel", "oneui" to "One UI", "classic" to "Classic"),
+                selected = settings.motionFeel
+            ) { value -> scope.launch { preferences.setMotionFeel(value) } }
+            Text(
+                when (settings.motionFeel) {
+                    "oneui" -> "Crisp and fast: small scale, quick fade, no bounce."
+                    "classic" -> "The original Haven transition: softer, more fade."
+                    else -> "Springy: the icon grows towards the app, the surface barely fades."
+                },
+                style = MaterialTheme.typography.bodySmall,
+                color = colors.onSurfaceVariant
+            )
             SubHeader("Speed")
             Segmented(
                 options = listOf("fast" to "Fast", "normal" to "Normal", "calm" to "Calm"),
@@ -597,4 +744,15 @@ private fun StepperRow(
             Icon(HavenIcons.Plus, contentDescription = "Increase $title")
         }
     }
+}
+
+private fun openWallpaperPicker(context: Context) {
+    val intent = Intent(Intent.ACTION_SET_WALLPAPER).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+    runCatching {
+        context.startActivity(Intent.createChooser(intent, "Wallpaper").addFlags(Intent.FLAG_ACTIVITY_NEW_TASK))
+    }.onFailure { toast(context, "No wallpaper app found") }
+}
+
+private fun toast(context: Context, message: String) {
+    Toast.makeText(context, message, Toast.LENGTH_SHORT).show()
 }

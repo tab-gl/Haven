@@ -18,6 +18,9 @@ private val Context.havenDataStore by preferencesDataStore(name = "haven_prefere
  * Everything the launcher lets you change. Values are validated on read *and* on write, so a
  * corrupted or downgraded preferences file can never put the UI in an impossible state.
  */
+/** One hosted home-screen widget: the host-assigned id and the page it sits on. */
+data class WidgetRef(val id: Int, val page: Int)
+
 data class LauncherSettings(
     val themeMode: String = "system",
     val monetEnabled: Boolean = true,
@@ -50,11 +53,19 @@ data class LauncherSettings(
     val animations: Boolean = true,
     /** "zoom" | "fade" | "none" */
     val motionStyle: String = "zoom",
+    /** "pixel" | "oneui" | "classic" — the shape of the spring, not just its speed. */
+    val motionFeel: String = "pixel",
     /** "fast" | "normal" | "calm" */
     val motionSpeed: String = "normal",
     val haptics: Boolean = true,
     /** "google" | "duckduckgo" | "brave" */
     val searchEngine: String = "google",
+    val searchCalculator: Boolean = true,
+    val searchContacts: Boolean = false,
+    val searchFiles: Boolean = false,
+    /** Home screen pages, 1..4. */
+    val pages: Int = 1,
+    val widgets: List<WidgetRef> = emptyList(),
     /** Component keys ("package/activity") hidden from the drawer. */
     val hidden: Set<String> = emptySet(),
     /** Ordered dock; null means "use the default dock" (dialer, messages, camera, browser). */
@@ -92,9 +103,15 @@ class LauncherPreferences(context: Context) {
         val drawerOpacity = intPreferencesKey("drawer_opacity")
         val animations = booleanPreferencesKey("animations")
         val motionStyle = stringPreferencesKey("motion_style")
+        val motionFeel = stringPreferencesKey("motion_feel")
         val motionSpeed = stringPreferencesKey("motion_speed")
         val haptics = booleanPreferencesKey("haptics")
         val searchEngine = stringPreferencesKey("search_engine")
+        val searchCalculator = booleanPreferencesKey("search_calculator")
+        val searchContacts = booleanPreferencesKey("search_contacts")
+        val searchFiles = booleanPreferencesKey("search_files")
+        val pages = intPreferencesKey("pages")
+        val widgets = stringPreferencesKey("widgets")
         val hidden = stringSetPreferencesKey("hidden_apps")
         val pinned = stringPreferencesKey("pinned_apps")
         val usage = stringPreferencesKey("usage")
@@ -129,9 +146,15 @@ class LauncherPreferences(context: Context) {
             drawerOpacity = (prefs[Keys.drawerOpacity] ?: 94).coerceIn(60, 100),
             animations = prefs[Keys.animations] ?: true,
             motionStyle = prefs[Keys.motionStyle].oneOf(MOTION_STYLES, "zoom"),
+            motionFeel = prefs[Keys.motionFeel].oneOf(MOTION_FEELS, "pixel"),
             motionSpeed = prefs[Keys.motionSpeed].oneOf(MOTION_SPEEDS, "normal"),
             haptics = prefs[Keys.haptics] ?: true,
             searchEngine = prefs[Keys.searchEngine].oneOf(SEARCH_ENGINES, "google"),
+            searchCalculator = prefs[Keys.searchCalculator] ?: true,
+            searchContacts = prefs[Keys.searchContacts] ?: false,
+            searchFiles = prefs[Keys.searchFiles] ?: false,
+            pages = (prefs[Keys.pages] ?: 1).coerceIn(1, 4),
+            widgets = decodeWidgets(prefs[Keys.widgets], (prefs[Keys.pages] ?: 1).coerceIn(1, 4)),
             hidden = prefs[Keys.hidden] ?: emptySet(),
             pinned = prefs[Keys.pinned]?.let { decodeList(it) },
             usage = UsageCodec.decode(prefs[Keys.usage])
@@ -166,9 +189,38 @@ class LauncherPreferences(context: Context) {
     suspend fun setDrawerOpacity(value: Int) = store.edit { it[Keys.drawerOpacity] = value.coerceIn(60, 100) }
     suspend fun setAnimations(value: Boolean) = store.edit { it[Keys.animations] = value }
     suspend fun setMotionStyle(value: String) = store.edit { it[Keys.motionStyle] = value.oneOf(MOTION_STYLES, "zoom") }
+    suspend fun setMotionFeel(value: String) = store.edit { it[Keys.motionFeel] = value.oneOf(MOTION_FEELS, "pixel") }
     suspend fun setMotionSpeed(value: String) = store.edit { it[Keys.motionSpeed] = value.oneOf(MOTION_SPEEDS, "normal") }
     suspend fun setHaptics(value: Boolean) = store.edit { it[Keys.haptics] = value }
     suspend fun setSearchEngine(value: String) = store.edit { it[Keys.searchEngine] = value.oneOf(SEARCH_ENGINES, "google") }
+    suspend fun setSearchCalculator(value: Boolean) = store.edit { it[Keys.searchCalculator] = value }
+    suspend fun setSearchContacts(value: Boolean) = store.edit { it[Keys.searchContacts] = value }
+    suspend fun setSearchFiles(value: Boolean) = store.edit { it[Keys.searchFiles] = value }
+
+    suspend fun setPages(value: Int) = store.edit { p ->
+        val pages = value.coerceIn(1, 4)
+        p[Keys.pages] = pages
+        // Keep every hosted widget reachable when a page is removed.
+        p[Keys.widgets]?.let { raw ->
+            p[Keys.widgets] = decodeWidgets(raw, pages).joinToString("\n") { "${it.id}:${it.page}" }
+        }
+    }
+
+    suspend fun addWidget(id: Int, page: Int) = store.edit { p ->
+        val pages = (p[Keys.pages] ?: 1).coerceIn(1, 4)
+        val current = decodeWidgets(p[Keys.widgets], pages).filterNot { it.id == id }
+        p[Keys.widgets] = (current + WidgetRef(id, page.coerceIn(0, pages - 1)))
+            .joinToString("\n") { "${it.id}:${it.page}" }
+    }
+
+    suspend fun removeWidget(id: Int) = store.edit { p ->
+        val pages = (p[Keys.pages] ?: 1).coerceIn(1, 4)
+        p[Keys.widgets] = decodeWidgets(p[Keys.widgets], pages)
+            .filterNot { it.id == id }
+            .joinToString("\n") { "${it.id}:${it.page}" }
+    }
+
+    suspend fun clearWidgets() = store.edit { it.remove(Keys.widgets) }
 
     suspend fun setPinned(keys: List<String>) = store.edit {
         it[Keys.pinned] = keys.distinct().take(MAX_PINNED).joinToString("\n")
@@ -207,8 +259,20 @@ class LauncherPreferences(context: Context) {
         val MOTION_STYLES = setOf("zoom", "fade", "none")
         val MOTION_SPEEDS = setOf("fast", "normal", "calm")
         val SEARCH_ENGINES = setOf("google", "duckduckgo", "brave")
+        val MOTION_FEELS = setOf("pixel", "oneui", "classic")
 
         private fun decodeList(raw: String): List<String> = raw.split('\n').filter { it.isNotBlank() }
+
+        private fun decodeWidgets(raw: String?, pages: Int): List<WidgetRef> =
+            raw?.split('\n')
+                ?.mapNotNull { line ->
+                    val parts = line.split(':')
+                    val id = parts.getOrNull(0)?.toIntOrNull() ?: return@mapNotNull null
+                    val page = parts.getOrNull(1)?.toIntOrNull() ?: 0
+                    WidgetRef(id, page.coerceIn(0, (pages - 1).coerceAtLeast(0)))
+                }
+                ?.distinctBy { it.id }
+                ?: emptyList()
 
         private fun String?.oneOf(allowed: Set<String>, fallback: String): String =
             if (this != null && this in allowed) this else fallback

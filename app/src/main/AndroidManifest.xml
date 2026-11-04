@@ -3,6 +3,16 @@
 
     <!-- Needed for the "Uninstall" action in the app long-press menu (API 28+). -->
     <uses-permission android:name="android.permission.REQUEST_DELETE_PACKAGES" />
+    <!-- Setting the wallpaper from the launcher's own settings. -->
+    <uses-permission android:name="android.permission.SET_WALLPAPER" />
+    <!-- Optional search sources; requested at the moment the user turns them on. -->
+    <uses-permission android:name="android.permission.READ_CONTACTS" />
+    <uses-permission android:name="android.permission.READ_MEDIA_IMAGES" />
+    <uses-permission android:name="android.permission.READ_MEDIA_VIDEO" />
+    <uses-permission android:name="android.permission.READ_MEDIA_AUDIO" />
+    <uses-permission
+        android:name="android.permission.READ_EXTERNAL_STORAGE"
+        android:maxSdkVersion="32" />
 
     <queries>
         <intent>
@@ -24,6 +34,22 @@
             <action android:name="android.intent.action.VIEW" />
             <category android:name="android.intent.category.BROWSABLE" />
             <data android:scheme="https" />
+        </intent>
+        <!-- Contact search dials and file search opens documents (Android 11+ visibility). -->
+        <intent>
+            <action android:name="android.intent.action.DIAL" />
+            <data android:scheme="tel" />
+        </intent>
+        <intent>
+            <action android:name="android.intent.action.VIEW" />
+            <data android:mimeType="*/*" />
+        </intent>
+        <!-- The widget picker lives in the system launcher / settings app. -->
+        <intent>
+            <action android:name="android.appwidget.action.APPWIDGET_PICK" />
+        </intent>
+        <intent>
+            <action android:name="android.intent.action.SET_WALLPAPER" />
         </intent>
     </queries>
 

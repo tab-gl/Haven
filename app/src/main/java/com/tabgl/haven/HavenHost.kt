@@ -7,12 +7,15 @@ import android.content.Intent
 import android.net.Uri
 import android.provider.Settings
 import androidx.activity.compose.BackHandler
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.background
 import androidx.compose.foundation.gestures.Orientation
 import androidx.compose.foundation.gestures.draggable
 import androidx.compose.foundation.gestures.rememberDraggableState
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.pager.rememberPagerState
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.ModalBottomSheet
@@ -30,6 +33,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.setValue
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clipToBounds
 import androidx.compose.ui.graphics.graphicsLayer
@@ -49,6 +53,7 @@ import com.tabgl.haven.ui.AppActions
 import com.tabgl.haven.ui.AppDrawer
 import com.tabgl.haven.ui.DrawerController
 import com.tabgl.haven.ui.HavenTheme
+import com.tabgl.haven.ui.HavenWidgets
 import com.tabgl.haven.ui.HomeScreen
 import com.tabgl.haven.ui.LaunchZoom
 import com.tabgl.haven.ui.LocalIconCache
@@ -83,6 +88,11 @@ private fun HavenRoot() {
     val preferences = remember(appContext) { LauncherPreferences(appContext) }
     val repository = remember(appContext) { AppRepository(appContext) }
     val iconCache = remember(appContext) { IconCache(appContext) }
+    val widgets = remember(appContext) { HavenWidgets(appContext) }
+    DisposableEffect(widgets) {
+        widgets.startListening()
+        onDispose { widgets.stopListening() }
+    }
     val initialSettings = remember(preferences) { preferences.readBlocking() }
     val settings by preferences.settings.collectAsState(initial = initialSettings)
 
@@ -104,7 +114,7 @@ private fun HavenRoot() {
 
     CompositionLocalProvider(LocalIconCache provides iconCache) {
         HavenTheme(settings) {
-            HavenScreen(settings, preferences, apps, defaultDock)
+            HavenScreen(settings, preferences, apps, defaultDock, widgets)
         }
     }
 }
@@ -115,13 +125,14 @@ private fun HavenScreen(
     settings: LauncherSettings,
     preferences: LauncherPreferences,
     apps: List<LauncherApp>,
-    defaultDock: List<String>
+    defaultDock: List<String>,
+    widgets: HavenWidgets
 ) {
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
     val drawer = remember { DrawerController(scope) }
     val zoom = remember { LaunchZoom(scope) }
-    val motion = remember(settings.animations, settings.motionStyle, settings.motionSpeed) {
+    val motion = remember(settings.animations, settings.motionStyle, settings.motionSpeed, settings.motionFeel) {
         motionSpecFor(settings)
     }
     var settingsOpen by remember { mutableStateOf(false) }
@@ -183,6 +194,20 @@ private fun HavenScreen(
         )
     }
 
+    val widgetLabels = remember(settings.widgets) { settings.widgets.map { it.id to widgets.labelOf(it.id) } }
+    val pages = settings.pages.coerceIn(1, 4)
+    val pagerState = rememberPagerState(pageCount = { pages })
+
+    // The system picker binds the widget for us: Haven only has to reserve the id first.
+    val widgetPicker = rememberLauncherForActivityResult(
+        ActivityResultContracts.StartActivityForResult()
+    ) { result ->
+        val id = widgets.boundIdFrom(result.resultCode, result.data)
+        if (id != null) {
+            scope.launch { preferences.addWidget(id, pagerState.currentPage) }
+        }
+    }
+
     val drawerVisible by remember { derivedStateOf { drawer.progress > 0.001f } }
 
     // Coming back from an app: collapse whatever was open and play the close transition.
@@ -226,6 +251,9 @@ private fun HavenScreen(
                 onOpenDrawer = { focusSearch -> drawer.open(focusSearch) },
                 onOpenSettings = { settingsOpen = true },
                 zoom = zoom,
+                widgets = widgets,
+                widgetRefs = settings.widgets,
+                pagerState = pagerState,
                 modifier = Modifier
                     .fillMaxSize()
                     .graphicsLayer {
@@ -276,9 +304,35 @@ private fun HavenScreen(
             onDismissRequest = { settingsOpen = false },
             sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
         ) {
-            SettingsSheet(settings, hiddenApps, preferences, versionName(context))
+            SettingsSheet(
+                settings = settings,
+                hiddenApps = hiddenApps,
+                preferences = preferences,
+                versionName = versionName(context),
+                widgetLabels = widgetLabels,
+                onAddWidget = {
+                    val id = widgets.allocateId()
+                    if (id == null) {
+                        toast(context, "Could not reserve a widget slot")
+                    } else {
+                        runCatching { widgetPicker.launch(widgets.pickerIntent(id)) }
+                            .onFailure {
+                                widgets.releaseId(id)
+                                toast(context, "No widget picker on this device")
+                            }
+                    }
+                },
+                onRemoveWidget = { id ->
+                    widgets.releaseId(id)
+                    scope.launch { preferences.removeWidget(id) }
+                }
+            )
         }
     }
+}
+
+private fun toast(context: Context, message: String) {
+    android.widget.Toast.makeText(context, message, android.widget.Toast.LENGTH_SHORT).show()
 }
 
 private fun openSystemScreen(context: Context, intent: Intent) {

@@ -3,7 +3,7 @@
 Haven is a lightweight Android launcher that pairs Material 3 colour and expressive-style rounded shapes with spring motion and a restrained, Nothing-style layout. It is built to stay smooth on low-end (1–3 GB RAM) devices.
 
 - **Application ID:** `app.tab.home`
-- **Version:** 0.7.0
+- **Version:** 0.8.0
 - **Minimum Android:** 8.0 (API 26) · **ABIs:** `armeabi-v7a`, `arm64-v8a`
 - **Stack:** Java host (activity + native clock) with Kotlin/Compose UI
 
@@ -14,6 +14,11 @@ Haven is a lightweight Android launcher that pairs Material 3 colour and express
 - **Frequent** row ranked by actual launch counts (with decay)
 - Interactive swipe-up drawer that follows your finger, with spring settle; pull down at the top of the list to close
 - Search: prefix, word, initials and fuzzy matching; Enter launches the top hit; web-search fallback
+- **Search sources:** a calculator that evaluates as you type, contacts, and media files — each off
+  until you turn it on, each behind its own permission request
+- **Home pages:** up to four pages of widgets with a parallax slide and page dots
+- **Widgets:** a real `AppWidgetHost`, so any installed widget can be added from the system picker
+- **Wallpaper:** set from the gallery (home screen only) or hand off to the system picker
 - Long-press menu: pin, hide, app info, uninstall
 - Live app list: updates when apps are installed, removed, updated or the language changes
 
@@ -29,8 +34,16 @@ legacy non-adaptive icons match the rest of the grid.
 
 ### Motion
 
-- **iOS-style open:** the launcher zooms out of the icon you tapped — that tile lifts as the rest of
-  the surface zooms past it — and the app takes over mid-transition.
+Three **feels**, modelled on the launchers people ask for by name:
+
+| Feel | What it does |
+| --- | --- |
+| **Pixel** | Springy. The tapped icon grows a long way towards the app, the surface barely fades, and the return settles with a little bounce. |
+| **One UI** | Crisp. Smaller scale, more fade, higher stiffness, almost no bounce — a snap rather than a glide. |
+| **Classic** | Haven's original softer fade. |
+
+- **Open:** the launcher zooms out of the icon you tapped — that tile lifts as the rest of the
+  surface zooms past it — and the app takes over mid-transition.
 - **iOS-style close:** returning runs the same value back to 0, so the launcher springs back in from
   the icon with a little bounce rather than cutting in.
 - **Press feedback:** icons dip and spring back on touch instead of flashing a ripple.
@@ -49,7 +62,10 @@ Everything below is live-previewed in the settings sheet (long-press the home sc
 | Dock & Frequent | dock slots 3–5 · dock background · Frequent row on/off and 0–5 slots |
 | Icons & grid | eight icon shapes · three icon styles (masked / natural / plate) · three icon sizes · labels on/off · 1–2 label lines · 3–6 drawer columns |
 | Drawer | opacity 60–100% · web-search engine (Google, DuckDuckGo, Brave) |
-| Motion | animations on/off · Zoom/Fade/Off · Fast/Normal/Calm · haptics |
+| Pages & widgets | 1–4 home pages · add and remove hosted widgets |
+| Search sources | calculator · contacts · files (each permission-gated) |
+| Wallpaper | set from gallery · system wallpaper picker |
+| Motion | animations on/off · Zoom/Fade/Off · Pixel/One UI/Classic · Fast/Normal/Calm · haptics |
 | Also | hidden-apps manager, one-tap reset to defaults |
 
 ## Why it stays light
@@ -68,6 +84,6 @@ Locally: JDK 17, Android SDK 36, Gradle 8.13 — `gradle :app:testDebugUnitTest 
 
 ## Not yet built
 
-Widgets, free-form workspace/drag-and-drop, folders, icon packs, themed (monochrome) icons, backup/restore, gesture editor. Device profiling on 2 GB hardware is still required before claiming performance numbers.
+Free-form widget placement and drag-and-drop, folders, icon packs, themed (monochrome) icons, backup/restore, gesture editor. Device profiling on 2 GB hardware is still required before claiming performance numbers.
 
 See [`docs/AUDIT.md`](docs/AUDIT.md) for the 0.6.0 review and [`docs/MVP.md`](docs/MVP.md) for status.

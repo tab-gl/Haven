@@ -1,6 +1,6 @@
 # Haven status
 
-## Shipped (0.7.0)
+## Shipped (0.8.0)
 
 - HOME activity (`singleTask`), regular launcher entry, Home-press collapses drawer/settings and
   plays the close transition
@@ -15,6 +15,10 @@
 - Bounded off-thread icon cache with adaptive-icon re-masking to the chosen shape
 - Material 3 theme with rounded shapes and spring motion, Monet, five palettes, accent colour on
   every palette, AMOLED black, system-bar icon contrast
+- Up to four home pages with a parallax slide and page dots; hosted widgets on any page
+- Search sources: calculator, contacts, media files (permission-gated, off by default except calc)
+- Wallpaper setting from the gallery or the system picker
+- Motion feels: Pixel, One UI and Classic presets
 - Eight icon shapes (superellipse squircle, circle, rounded, cut, teardrop, pebble, arch, hexagon)
   and three icon styles (masked, natural, plate)
 - iOS-style open/close transition (zoom or fade, three speeds, master switch), a lifting launch
@@ -24,7 +28,7 @@
 
 ## Deferred
 
-- Widget host, workspace placement, folders, drag-and-drop
+- Free-form widget placement, workspace drag-and-drop, folders
 - Icon packs, themed (monochrome) icons, backup/restore, gesture editor
 - Per-app icon overrides
 - Work-profile apps (needs `LauncherApps`), app shortcuts, notification badges
