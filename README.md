@@ -1,6 +1,6 @@
 # Haven Launcher
 
-Haven is a lightweight Android launcher that pairs Material 3 Expressive motion and shape with a restrained, Nothing-style layout. It is built to stay smooth on low-end (1–3 GB RAM) devices.
+Haven is a lightweight Android launcher that pairs Material 3 colour and expressive-style rounded shapes with spring motion and a restrained, Nothing-style layout. It is built to stay smooth on low-end (1–3 GB RAM) devices.
 
 - **Application ID:** `app.tab.home`
 - **Version:** 0.5.0
@@ -18,7 +18,7 @@ Haven is a lightweight Android launcher that pairs Material 3 Expressive motion 
 - Hidden apps (restore from settings), icon shapes, compact icons, 3–6 columns, labels on/off
 - Light/dark/system, Monet dynamic colour on Android 12+, five palettes with accessible contrast
 - Live app list: updates when apps are installed, removed, updated or the language changes
-- Material 3 Expressive theme and motion scheme
+- Material 3 theme with large rounded shapes and spring-driven motion (the official Expressive theme APIs need a newer Material3 than the pinned 1.4.0)
 
 ## Why it stays light
 

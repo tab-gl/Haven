@@ -9,7 +9,7 @@
 - Long-press menu (pin, hide, app info, uninstall), hidden-apps management
 - DataStore-backed settings, read before first frame (no theme flash)
 - Bounded off-thread icon cache with adaptive-icon re-masking to the chosen shape
-- Material 3 Expressive theme, Monet, five palettes, system-bar icon contrast
+- Material 3 theme with rounded shapes and spring motion, Monet, five palettes, system-bar icon contrast
 - Unit tests for search ranking and usage encoding; CI runs tests, debug APKs and an R8 release build
 
 ## Deferred
