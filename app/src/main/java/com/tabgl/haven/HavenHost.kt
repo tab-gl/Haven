@@ -148,7 +148,7 @@ private fun HavenScreen(
         AppActions(
             launch = { app, origin ->
                 // iOS-style open: the launcher zooms into the icon, then the app takes over.
-                zoom.open(origin, motion) {
+                zoom.open(app.key, origin, motion) {
                     val intent = Intent(Intent.ACTION_MAIN)
                         .addCategory(Intent.CATEGORY_LAUNCHER)
                         .setClassName(app.packageName, app.activityName)
@@ -225,13 +225,17 @@ private fun HavenScreen(
                 actions = actions,
                 onOpenDrawer = { focusSearch -> drawer.open(focusSearch) },
                 onOpenSettings = { settingsOpen = true },
+                zoom = zoom,
                 modifier = Modifier
                     .fillMaxSize()
                     .graphicsLayer {
+                        // The home recedes into the distance as the drawer sheet comes up.
                         val p = drawer.progress
-                        alpha = 1f - p
-                        scaleX = 1f - 0.04f * p
-                        scaleY = 1f - 0.04f * p
+                        val recede = 1f - 0.06f * p
+                        alpha = 1f - 0.55f * p
+                        scaleX = recede
+                        scaleY = recede
+                        translationY = -size.height * 0.02f * p
                     }
                     .draggable(
                         orientation = Orientation.Vertical,
@@ -248,15 +252,16 @@ private fun HavenScreen(
                     actions = actions,
                     autoFocusSearch = drawer.autoFocusSearch,
                     onClose = { drawer.close() },
+                    zoom = zoom,
                     modifier = Modifier
                         .fillMaxSize()
                         .clipToBounds()
                         .graphicsLayer {
                             val p = drawer.progress
-                            alpha = p
-                            translationY = (1f - p) * size.height * 0.1f
+                            alpha = p.coerceIn(0f, 1f)
+                            translationY = (1f - p) * size.height * 0.12f
                             // A whisper of scale makes the drawer feel like a sheet, not a slab.
-                            val s = 0.96f + 0.04f * p
+                            val s = 0.965f + 0.035f * p
                             scaleX = s
                             scaleY = s
                         }

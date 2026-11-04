@@ -67,7 +67,9 @@ fun AppEntry(
     actions: AppActions,
     modifier: Modifier = Modifier,
     labelLines: Int = 1,
-    haptics: Boolean = true
+    haptics: Boolean = true,
+    iconStyle: String = "masked",
+    zoom: LaunchZoom? = null
 ) {
     var menuOpen by remember { mutableStateOf(false) }
     val haptic = LocalHapticFeedback.current
@@ -117,9 +119,14 @@ fun AppEntry(
                 app = app,
                 size = iconSize,
                 shapeName = shapeName,
+                style = iconStyle,
                 modifier = Modifier.graphicsLayer {
-                    scaleX = pressScale
-                    scaleY = pressScale
+                    // The tapped icon lifts as the launcher zooms past it, so the app looks like it
+                    // grows out of that specific tile. Read inside the layer: no recomposition.
+                    val lift = if (zoom != null && zoom.launchingKey == app.key) zoom.progress else 0f
+                    val scale = pressScale * (1f + 0.34f * lift)
+                    scaleX = scale
+                    scaleY = scale
                 }
             )
             if (showLabel) {

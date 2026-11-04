@@ -64,6 +64,7 @@ fun AppDrawer(
     actions: AppActions,
     autoFocusSearch: Boolean,
     onClose: () -> Unit,
+    zoom: LaunchZoom,
     modifier: Modifier = Modifier
 ) {
     val context = LocalContext.current
@@ -173,7 +174,9 @@ fun AppDrawer(
                         inDock = app.key in dockKeys,
                         actions = actions,
                         labelLines = settings.labelLines,
-                        haptics = settings.haptics
+                        haptics = settings.haptics,
+                        iconStyle = settings.iconStyle,
+                        zoom = zoom
                     )
                 }
             }

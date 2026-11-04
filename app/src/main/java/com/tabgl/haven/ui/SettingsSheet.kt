@@ -223,15 +223,24 @@ fun SettingsSheet(
         // ---- Icons & grid -----------------------------------------------------
         SectionHeader("Icons and grid")
         SubHeader("Icon shape")
-        ChipGroup(
-            options = listOf(
-                "squircle" to "Squircle",
-                "circle" to "Circle",
-                "rounded" to "Round",
-                "square" to "Cut"
-            ),
-            selected = settings.iconShape
-        ) { value -> scope.launch { preferences.setIconShape(value) } }
+        ShapeChips(selected = settings.iconShape) { value ->
+            scope.launch { preferences.setIconShape(value) }
+        }
+
+        SubHeader("Icon style")
+        Segmented(
+            options = listOf("masked" to "Masked", "natural" to "Natural", "plate" to "Plate"),
+            selected = settings.iconStyle
+        ) { value -> scope.launch { preferences.setIconStyle(value) } }
+        Text(
+            when (settings.iconStyle) {
+                "natural" -> "Icons keep their own shape; the shape above is not applied."
+                "plate" -> "Artwork sits inset on a tinted tile, so legacy icons match."
+                else -> "Artwork is cropped to the shape above."
+            },
+            style = MaterialTheme.typography.bodySmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant
+        )
 
         SubHeader("Icon size")
         Segmented(options = ICON_SCALES, selected = settings.iconScale) { value ->
@@ -414,6 +423,32 @@ private fun ChipGroup(
                 selected = value == selected,
                 onClick = { onSelect(value) },
                 label = { Text(label) }
+            )
+        }
+    }
+}
+
+@OptIn(ExperimentalLayoutApi::class)
+@Composable
+private fun ShapeChips(selected: String, onSelect: (String) -> Unit) {
+    FlowRow(
+        horizontalArrangement = Arrangement.spacedBy(8.dp),
+        verticalArrangement = Arrangement.spacedBy(8.dp)
+    ) {
+        IconShapes.NAMES.forEach { (value, label) ->
+            FilterChip(
+                selected = value == selected,
+                onClick = { onSelect(value) },
+                label = { Text(label) },
+                leadingIcon = {
+                    // Each chip previews the shape it selects.
+                    Box(
+                        Modifier
+                            .size(16.dp)
+                            .clip(IconShapes.of(value))
+                            .background(MaterialTheme.colorScheme.primary)
+                    )
+                }
             )
         }
     }

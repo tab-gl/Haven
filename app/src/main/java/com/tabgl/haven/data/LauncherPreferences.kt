@@ -26,6 +26,8 @@ data class LauncherSettings(
     val accent: String = "auto",
     val palette: String = "aurora",
     val iconShape: String = "squircle",
+    /** "masked" (Haven's shape) | "natural" (as the system draws it) | "plate" (inset on a tinted plate). */
+    val iconStyle: String = "masked",
     /** "compact" | "normal" | "large" */
     val iconScale: String = "normal",
     val columns: Int = 4,
@@ -71,6 +73,7 @@ class LauncherPreferences(context: Context) {
         val accent = stringPreferencesKey("accent")
         val palette = stringPreferencesKey("palette")
         val iconShape = stringPreferencesKey("icon_shape")
+        val iconStyle = stringPreferencesKey("icon_style")
         val iconScale = stringPreferencesKey("icon_scale")
         val legacyCompactIcons = booleanPreferencesKey("compact_icons")
         val columns = intPreferencesKey("columns")
@@ -105,6 +108,7 @@ class LauncherPreferences(context: Context) {
             accent = prefs[Keys.accent].oneOf(ACCENTS, "auto"),
             palette = prefs[Keys.palette].oneOf(PALETTES, "aurora"),
             iconShape = prefs[Keys.iconShape].oneOf(SHAPES, "squircle"),
+            iconStyle = prefs[Keys.iconStyle].oneOf(ICON_STYLES, "masked"),
             iconScale = prefs[Keys.iconScale].oneOf(SCALES, "normal").let { scale ->
                 // 0.5.x only had a boolean "compact icons" toggle.
                 if (prefs[Keys.iconScale] == null && prefs[Keys.legacyCompactIcons] == true) "compact" else scale
@@ -144,6 +148,7 @@ class LauncherPreferences(context: Context) {
     suspend fun setAccent(value: String) = store.edit { it[Keys.accent] = value.oneOf(ACCENTS, "auto") }
     suspend fun setPalette(value: String) = store.edit { it[Keys.palette] = value.oneOf(PALETTES, "aurora") }
     suspend fun setIconShape(value: String) = store.edit { it[Keys.iconShape] = value.oneOf(SHAPES, "squircle") }
+    suspend fun setIconStyle(value: String) = store.edit { it[Keys.iconStyle] = value.oneOf(ICON_STYLES, "masked") }
     suspend fun setIconScale(value: String) = store.edit { it[Keys.iconScale] = value.oneOf(SCALES, "normal") }
     suspend fun setColumns(value: Int) = store.edit { it[Keys.columns] = value.coerceIn(3, 6) }
     suspend fun setLabelLines(value: Int) = store.edit { it[Keys.labelLines] = value.coerceIn(1, 2) }
@@ -194,7 +199,10 @@ class LauncherPreferences(context: Context) {
         val THEME_MODES = setOf("system", "light", "dark")
         val ACCENTS = setOf("auto", "lime", "blue", "coral", "violet")
         val PALETTES = setOf("aurora", "ocean", "sunset", "lavender", "mono")
-        val SHAPES = setOf("squircle", "circle", "rounded", "square")
+        val SHAPES = setOf(
+            "squircle", "circle", "rounded", "square", "teardrop", "pebble", "arch", "hexagon"
+        )
+        val ICON_STYLES = setOf("masked", "natural", "plate")
         val SCALES = setOf("compact", "normal", "large")
         val MOTION_STYLES = setOf("zoom", "fade", "none")
         val MOTION_SPEEDS = setOf("fast", "normal", "calm")

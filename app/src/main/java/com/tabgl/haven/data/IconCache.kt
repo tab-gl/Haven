@@ -18,8 +18,10 @@ import kotlinx.coroutines.withContext
 
 /**
  * Memory-bounded icon cache. Icons are decoded off the main thread, two at a time, at the exact
- * pixel size they are drawn at. Adaptive icons are rendered as full-bleed layers so Haven's own
- * icon shape (not the system mask) is applied afterwards.
+ * pixel size they are drawn at.
+ *
+ * Adaptive icons are normally rendered as full-bleed layers so Haven's own icon shape (not the
+ * system mask) is applied afterwards. The [IconStyle] decides how the artwork is laid down.
  */
 class IconCache(context: Context) {
     private val packageManager: PackageManager = context.applicationContext.packageManager
@@ -35,14 +37,14 @@ class IconCache(context: Context) {
         }
     }
 
-    fun peek(key: String, sizePx: Int): ImageBitmap? = cache.get("$key@$sizePx")
+    fun peek(key: String, sizePx: Int, style: String): ImageBitmap? = cache.get(cacheKey(key, sizePx, style))
 
-    suspend fun load(app: LauncherApp, sizePx: Int): ImageBitmap? {
-        val cacheKey = "${app.key}@$sizePx"
+    suspend fun load(app: LauncherApp, sizePx: Int, style: String): ImageBitmap? {
+        val cacheKey = cacheKey(app.key, sizePx, style)
         cache.get(cacheKey)?.let { return it }
         return gate.withPermit {
             cache.get(cacheKey) ?: withContext(Dispatchers.Default) {
-                render(app, sizePx)?.also { cache.put(cacheKey, it) }
+                render(app, sizePx, style)?.also { cache.put(cacheKey, it) }
             }
         }
     }
@@ -57,26 +59,44 @@ class IconCache(context: Context) {
         }
     }
 
-    private fun render(app: LauncherApp, px: Int): ImageBitmap? = try {
+    private fun cacheKey(key: String, sizePx: Int, style: String): String = "$key@$sizePx@$style"
+
+    private fun render(app: LauncherApp, px: Int, style: String): ImageBitmap? = try {
         val drawable = packageManager.getActivityIcon(ComponentName(app.packageName, app.activityName))
-        toBitmap(drawable, px).asImageBitmap()
+        toBitmap(drawable, px, style).asImageBitmap()
     } catch (e: Exception) {
         null
     }
 
-    private fun toBitmap(drawable: Drawable, px: Int): Bitmap {
+    private fun toBitmap(drawable: Drawable, px: Int, style: String): Bitmap {
         val bitmap = Bitmap.createBitmap(px, px, Bitmap.Config.ARGB_8888)
         val canvas = Canvas(bitmap)
-        if (drawable is AdaptiveIconDrawable) {
-            // Layers are 108dp for a 72dp visible window: extend bounds by a quarter on each side.
-            val o = px / 4
-            drawable.background?.let { it.setBounds(-o, -o, px + o, px + o); it.draw(canvas) }
-            drawable.foreground?.let { it.setBounds(-o, -o, px + o, px + o); it.draw(canvas) }
-        } else {
-            val inset = (px * 0.1f).toInt()
-            drawable.setBounds(inset, inset, px - inset, px - inset)
-            drawable.draw(canvas)
+        when (style) {
+            // Exactly what the system would show: adaptive icons keep their OEM mask.
+            "natural" -> {
+                drawable.setBounds(0, 0, px, px)
+                drawable.draw(canvas)
+            }
+            // Inset so the tinted plate behind the artwork is visible around it.
+            "plate" -> drawInset(drawable, canvas, px, (px * 0.16f).toInt())
+            else -> drawInset(drawable, canvas, px, 0)
         }
         return bitmap
+    }
+
+    private fun drawInset(drawable: Drawable, canvas: Canvas, px: Int, inset: Int) {
+        val edge = px - inset * 2
+        if (drawable is AdaptiveIconDrawable) {
+            // Layers are 108dp for a 72dp visible window: extend bounds by a quarter on each side.
+            val bleed = edge / 4
+            val left = inset - bleed
+            val right = inset + edge + bleed
+            drawable.background?.let { it.setBounds(left, left, right, right); it.draw(canvas) }
+            drawable.foreground?.let { it.setBounds(left, left, right, right); it.draw(canvas) }
+        } else {
+            val padding = inset + (edge * 0.1f).toInt()
+            drawable.setBounds(padding, padding, px - padding, px - padding)
+            drawable.draw(canvas)
+        }
     }
 }

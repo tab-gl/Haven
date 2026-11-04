@@ -48,6 +48,7 @@ fun HomeScreen(
     actions: AppActions,
     onOpenDrawer: (focusSearch: Boolean) -> Unit,
     onOpenSettings: () -> Unit,
+    zoom: LaunchZoom,
     modifier: Modifier = Modifier
 ) {
     val context = LocalContext.current
@@ -142,6 +143,8 @@ fun HomeScreen(
                         inDock = false,
                         actions = actions,
                         haptics = settings.haptics,
+                        iconStyle = settings.iconStyle,
+                        zoom = zoom,
                         modifier = Modifier.weight(1f)
                     )
                 }
@@ -182,6 +185,8 @@ fun HomeScreen(
                     inDock = true,
                     actions = actions,
                     haptics = settings.haptics,
+                    iconStyle = settings.iconStyle,
+                    zoom = zoom,
                     modifier = Modifier.weight(1f)
                 )
             }

@@ -51,17 +51,23 @@ class LaunchZoom(private val scope: CoroutineScope) {
     var origin by mutableStateOf(ZoomOrigin.CENTER)
         private set
 
+    /** The tile being launched, so it can lift while the rest of the surface zooms past it. */
+    var launchingKey by mutableStateOf<String?>(null)
+        private set
+
     private var job: Job? = null
 
     /**
      * Runs the open transition, then calls [launch] exactly once. [launch] returns whether the app
      * actually started; if it did not, the launcher retreats instead of being left faded out.
      */
-    fun open(from: ZoomOrigin?, spec: MotionSpec, launch: () -> Boolean) {
+    fun open(key: String?, from: ZoomOrigin?, spec: MotionSpec, launch: () -> Boolean) {
         job?.cancel()
         from?.let { origin = it }
+        launchingKey = key
         if (!spec.enabled) {
             progress = 0f
+            launchingKey = null
             launch()
             return
         }
@@ -77,7 +83,8 @@ class LaunchZoom(private val scope: CoroutineScope) {
             animate(
                 initialValue = progress,
                 targetValue = 1f,
-                animationSpec = spring(dampingRatio = spec.damping, stiffness = spec.stiffness)
+                // Opens a little stiffer than it closes: leaving must feel instant, arriving can breathe.
+                animationSpec = spring(dampingRatio = spec.damping, stiffness = spec.stiffness * OPEN_STIFFNESS)
             ) { value, _ ->
                 progress = value.coerceIn(0f, 1f)
                 if (progress >= LAUNCH_AT) fire()
@@ -90,6 +97,7 @@ class LaunchZoom(private val scope: CoroutineScope) {
                     animationSpec = spring(dampingRatio = 0.92f, stiffness = spec.stiffness)
                 ) { value, _ -> progress = value.coerceIn(0f, 1f) }
                 progress = 0f
+                launchingKey = null
             }
         }
     }
@@ -105,20 +113,27 @@ class LaunchZoom(private val scope: CoroutineScope) {
             animate(
                 initialValue = progress,
                 targetValue = 0f,
-                animationSpec = spring(dampingRatio = 0.92f, stiffness = spec.stiffness * 0.85f)
+                animationSpec = spring(dampingRatio = CLOSE_DAMPING, stiffness = spec.stiffness * CLOSE_STIFFNESS)
             ) { value, _ -> progress = value.coerceIn(0f, 1f) }
             progress = 0f
+            launchingKey = null
         }
     }
 
     fun reset() {
         job?.cancel()
         progress = 0f
+        launchingKey = null
     }
 
     private companion object {
         /** Launch once the zoom is far enough along that the app window lands on top of it. */
-        const val LAUNCH_AT = 0.62f
+        const val LAUNCH_AT = 0.55f
+        const val OPEN_STIFFNESS = 1.25f
+        const val CLOSE_STIFFNESS = 0.8f
+
+        /** A touch of bounce on the way back keeps the return from feeling like a fade. */
+        const val CLOSE_DAMPING = 0.78f
     }
 }
 
@@ -132,12 +147,14 @@ fun Modifier.surfaceZoom(zoom: LaunchZoom, spec: MotionSpec): Modifier = graphic
     transformOrigin = TransformOrigin(zoom.origin.x, zoom.origin.y)
     when (spec.mode) {
         MotionSpec.NONE -> Unit
-        MotionSpec.FADE -> alpha = 1f - 0.9f * p
+        MotionSpec.FADE -> alpha = 1f - 0.78f * p
         else -> {
             val scale = 1f + ZOOM_GAIN * p
             scaleX = scale
             scaleY = scale
-            alpha = 1f - 0.92f * p
+            // Not fully transparent: the app window covers this, and holding a little alpha makes
+            // the return read as a settle instead of a hard cut from black.
+            alpha = 1f - 0.72f * p
         }
     }
 }

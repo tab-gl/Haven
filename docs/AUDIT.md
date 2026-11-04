@@ -1,4 +1,4 @@
-# Haven 0.6.0 audit
+# Haven audit — 0.5.0 → 0.7.0
 
 A read-through of the 0.5.0 source, what was wrong, and what changed. Every item below is either
 fixed in this release or explicitly left alone with a reason.
@@ -12,7 +12,8 @@ fixed in this release or explicitly left alone with a reason.
 | 3 | **The drawer's top row felt stuck.** `NestedScrollConnection.onPreScroll` consumed *every* upward scroll while the drawer was between 0 and 1, before the grid saw it, so the first fling at the top of the list did nothing. | The upward hand-over is gone; only unconsumed downward scroll closes the drawer. |
 | 4 | **Phantom button on the home screen.** The whole home surface used `combinedClickable(onClick = {})` purely to get a long-press. That exposed a clickable with no action to TalkBack. | Replaced with `pointerInput { detectTapGestures(onLongPress = …) }`, which keeps the gesture and leaves the accessibility tree clean. |
 | 5 | **Hard-coded dock size in two places** (`DOCK_SIZE` in the host, `SLOTS` in the home screen) that could drift apart. | Both come from `settings.dockSlots`, and the planner owns the cap. |
-| 6 | **Package broadcasts reloaded twice** for a replacing update, and icon state was not part of the reload at all. | Single conflated flow carrying the changed packages; the reload is debounced once. |
+| 6 | **"Squircle" was really a circle.** `RoundedCornerShape(34.dp)` is larger than the half-width of a 42 dp dock icon, so the radius collapsed to a circle at home sizes while looking right only in the drawer. Corner radii are now percentages of the icon, and the squircle is a real superellipse path. |
+| 7 | **Package broadcasts reloaded twice** for a replacing update, and icon state was not part of the reload at all. | Single conflated flow carrying the changed packages; the reload is debounced once. |
 
 ## Smoothness
 
@@ -24,6 +25,26 @@ fixed in this release or explicitly left alone with a reason.
 - Motion is derived once per settings change (`motionSpecFor`) rather than rebuilding springs in
   composition.
 - `kotlinOptions` (deprecated in Kotlin 2.2) replaced with the `compilerOptions` DSL.
+
+## Icon shapes and styles (0.7.0)
+
+- Eight shapes: squircle (superellipse), circle, rounded, cut, teardrop, pebble, arch, hexagon.
+  All percentage-based, so the same shape renders identically at 32 dp and 60 dp.
+- Three styles: `masked` (crop to shape, adaptive icons rendered full-bleed), `natural` (leave the
+  system's mask alone) and `plate` (artwork inset 16% on a tinted tile so legacy icons match).
+- The style is part of the icon cache key, so switching styles re-decodes instead of showing stale
+  artwork, and `invalidatePackage` still drops every size of a changed package.
+
+## Motion refinements (0.7.0)
+
+- The tapped tile lifts (up to 1.34×) while the surface zooms past it, so the app reads as growing
+  out of that specific icon rather than out of the screen.
+- Opening is stiffer than closing (1.25× vs 0.8×) and fires `startActivity` at 55% instead of 62%:
+  leaving feels instant, arriving can breathe.
+- The return uses a lighter damping ratio (0.78) for a small settle instead of a dead stop, and the
+  zoomed surface holds 28% alpha at full progress so the return never cuts in from black.
+- The home recedes further behind the drawer (0.94 scale, 45% dim, 2% lift) while the drawer rises
+  with a touch more travel and scale.
 
 ## Customisation added
 

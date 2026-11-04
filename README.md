@@ -3,7 +3,7 @@
 Haven is a lightweight Android launcher that pairs Material 3 colour and expressive-style rounded shapes with spring motion and a restrained, Nothing-style layout. It is built to stay smooth on low-end (1–3 GB RAM) devices.
 
 - **Application ID:** `app.tab.home`
-- **Version:** 0.6.0
+- **Version:** 0.7.0
 - **Minimum Android:** 8.0 (API 26) · **ABIs:** `armeabi-v7a`, `arm64-v8a`
 - **Stack:** Java host (activity + native clock) with Kotlin/Compose UI
 
@@ -17,11 +17,25 @@ Haven is a lightweight Android launcher that pairs Material 3 colour and express
 - Long-press menu: pin, hide, app info, uninstall
 - Live app list: updates when apps are installed, removed, updated or the language changes
 
+### Icon shapes and styles
+
+Eight shapes — squircle, circle, rounded, cut, teardrop, pebble, arch, hexagon — all defined as a
+percentage of the icon, so a shape looks identical in the dock, the Frequent row and the drawer.
+The squircle is a real superellipse, not a rounded rectangle.
+
+Three styles decide the artwork treatment: **Masked** crops the icon to the chosen shape,
+**Natural** leaves the system's own mask alone, and **Plate** insets the artwork on a tinted tile so
+legacy non-adaptive icons match the rest of the grid.
+
 ### Motion
 
-- **iOS-style open:** the launcher zooms out of the icon you tapped and fades as the app takes over, then springs back in when you return — the app appears to grow from, and collapse into, its icon.
+- **iOS-style open:** the launcher zooms out of the icon you tapped — that tile lifts as the rest of
+  the surface zooms past it — and the app takes over mid-transition.
+- **iOS-style close:** returning runs the same value back to 0, so the launcher springs back in from
+  the icon with a little bounce rather than cutting in.
 - **Press feedback:** icons dip and spring back on touch instead of flashing a ripple.
-- Three styles (Zoom / Fade / Off), three speeds (Fast / Normal / Calm) and a master switch, so motion can be turned off entirely for accessibility or battery.
+- Three styles (Zoom / Fade / Off), three speeds (Fast / Normal / Calm) and a master switch, so
+  motion can be turned off entirely for accessibility or battery.
 
 ### Customisation
 
@@ -33,7 +47,7 @@ Everything below is live-previewed in the settings sheet (long-press the home sc
 | Wallpaper | show/hide · dim 0–85% |
 | Home screen | Haven wordmark · clock on/off and size · search pill |
 | Dock & Frequent | dock slots 3–5 · dock background · Frequent row on/off and 0–5 slots |
-| Icons & grid | four icon shapes · three icon sizes · labels on/off · 1–2 label lines · 3–6 drawer columns |
+| Icons & grid | eight icon shapes · three icon styles (masked / natural / plate) · three icon sizes · labels on/off · 1–2 label lines · 3–6 drawer columns |
 | Drawer | opacity 60–100% · web-search engine (Google, DuckDuckGo, Brave) |
 | Motion | animations on/off · Zoom/Fade/Off · Fast/Normal/Calm · haptics |
 | Also | hidden-apps manager, one-tap reset to defaults |
