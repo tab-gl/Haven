@@ -1,9 +1,9 @@
 package com.tabgl.haven.ui
 
 import androidx.compose.foundation.shape.CircleShape
-import androidx.compose.foundation.shape.CornerBasedShape
 import androidx.compose.foundation.shape.CutCornerShape
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.ui.geometry.Rect
 import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Outline
 import androidx.compose.ui.graphics.Path
@@ -18,12 +18,28 @@ import kotlin.math.sign
 import kotlin.math.sin
 
 /**
- * The shapes an app icon can be masked into.
+ * The corner radii of a rounded icon shape, as percentages of the icon.
  *
- * Every rounded shape is expressed as a **percentage of the icon**, not in dp. The 0.5.x build used
- * `RoundedCornerShape(34.dp)`, which is larger than the radius of a 42 dp icon — so "Squircle"
- * silently rendered as a circle on the home screen while looking correct only at drawer sizes.
+ * The four numbers are not free: two corners share every edge, so a pair may never add up to more
+ * than 100% or the shape stops being a shape. Compose does not clamp this for you, and an
+ * over-rounded outline can degenerate into a clip that swallows the icon whole — which is exactly
+ * how 0.8.0 shipped a "Pebble" (46 / 56 / 42 / 58) that drew as a plain circle.
  */
+data class IconCorners(
+    val topStart: Int,
+    val topEnd: Int,
+    val bottomEnd: Int,
+    val bottomStart: Int
+) {
+    /** True when every edge can hold both of its corners. */
+    fun fits(): Boolean =
+        listOf(topStart, topEnd, bottomEnd, bottomStart).all { it in 0..50 } &&
+            topStart + topEnd <= 100 &&
+            bottomStart + bottomEnd <= 100 &&
+            topStart + bottomStart <= 100 &&
+            topEnd + bottomEnd <= 100
+}
+
 object IconShapes {
 
     /** Draw order for the settings picker. */
@@ -38,38 +54,37 @@ object IconShapes {
         "hexagon" to "Hexagon"
     )
 
-    private val ROUNDED: Shape = RoundedCornerShape(24)
+    /**
+     * Corner radii for every rounded shape, kept as data so [fits] can be asserted in a unit test.
+     * Path-based shapes (squircle, hexagon) are not listed here.
+     */
+    val CORNERS: Map<String, IconCorners> = mapOf(
+        "circle" to IconCorners(50, 50, 50, 50),
+        "rounded" to IconCorners(24, 24, 24, 24),
+        "teardrop" to IconCorners(50, 50, 50, 0),
+        // Organic and asymmetric, but every edge still closes: 46+50 / 50+42 / 46+42 / 50+50.
+        "pebble" to IconCorners(46, 50, 42, 50),
+        "arch" to IconCorners(50, 50, 16, 16)
+    )
+
     private val CUT: Shape = CutCornerShape(22)
-    private val TEARDROP: CornerBasedShape = RoundedCornerShape(
-        topStartPercent = 50,
-        topEndPercent = 50,
-        bottomEndPercent = 50,
-        bottomStartPercent = 0
-    )
-    private val PEBBLE: CornerBasedShape = RoundedCornerShape(
-        topStartPercent = 46,
-        topEndPercent = 56,
-        bottomEndPercent = 42,
-        bottomStartPercent = 58
-    )
-    private val ARCH: CornerBasedShape = RoundedCornerShape(
-        topStartPercent = 50,
-        topEndPercent = 50,
-        bottomEndPercent = 16,
-        bottomStartPercent = 16
-    )
     private val SQUIRCLE: Shape = SuperellipseShape(4f)
     private val HEXAGON: Shape = HexagonShape()
 
-    fun of(name: String): Shape = when (name) {
-        "circle" -> CircleShape
-        "rounded" -> ROUNDED
-        "square" -> CUT
-        "teardrop" -> TEARDROP
-        "pebble" -> PEBBLE
-        "arch" -> ARCH
-        "hexagon" -> HEXAGON
-        else -> SQUIRCLE
+    private fun rounded(corners: IconCorners): Shape = RoundedCornerShape(
+        topStartPercent = corners.topStart,
+        topEndPercent = corners.topEnd,
+        bottomEndPercent = corners.bottomEnd,
+        bottomStartPercent = corners.bottomStart
+    )
+
+    fun of(name: String): Shape {
+        CORNERS[name]?.let { return rounded(it) }
+        return when (name) {
+            "square" -> CUT
+            "hexagon" -> HEXAGON
+            else -> SQUIRCLE
+        }
     }
 }
 
@@ -83,7 +98,7 @@ private class SuperellipseShape(private val exponent: Float) : Shape {
     private var cachedPath: Path? = null
 
     override fun createOutline(size: Size, layoutDirection: LayoutDirection, density: Density): Outline {
-        if (size.width <= 0f || size.height <= 0f) return Outline.Rectangle(androidx.compose.ui.geometry.Rect(0f, 0f, size.width, size.height))
+        if (size.width <= 0f || size.height <= 0f) return Outline.Rectangle(Rect(0f, 0f, size.width, size.height))
         if (size == cachedSize) cachedPath?.let { return Outline.Generic(it) }
 
         val a = size.width / 2f

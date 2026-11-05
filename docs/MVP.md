@@ -1,6 +1,6 @@
 # Haven status
 
-## Shipped (0.8.0)
+## Shipped (0.8.1)
 
 - HOME activity (`singleTask`), regular launcher entry, Home-press collapses drawer/settings and
   plays the close transition
@@ -19,7 +19,7 @@
 - Search sources: calculator, contacts, media files (permission-gated, off by default except calc)
 - Wallpaper setting from the gallery or the system picker
 - Motion feels: Pixel, One UI and Classic presets
-- Eight icon shapes (superellipse squircle, circle, rounded, cut, teardrop, pebble, arch, hexagon)
+- Eight icon shapes (corner radii validated by unit test) (superellipse squircle, circle, rounded, cut, teardrop, pebble, arch, hexagon)
   and three icon styles (masked, natural, plate)
 - iOS-style open/close transition (zoom or fade, three speeds, master switch), a lifting launch
   tile and press feedback

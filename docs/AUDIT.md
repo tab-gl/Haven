@@ -1,4 +1,4 @@
-# Haven audit — 0.5.0 → 0.8.0
+# Haven audit — 0.5.0 → 0.8.1
 
 A read-through of the 0.5.0 source, what was wrong, and what changed. Every item below is either
 fixed in this release or explicitly left alone with a reason.
@@ -91,6 +91,19 @@ is chosen.
 
 Two paths: the photo picker (`PickVisualMedia`, no storage permission) decoded down to a 2560 px edge
 and applied to `FLAG_SYSTEM` only, or a hand-off to `ACTION_SET_WALLPAPER`.
+
+## 0.8.1 — the empty dock
+
+Reported from a device recording: after changing the icon shape to **Pebble**, the dock kept its
+pill and its height but showed no icons at all.
+
+| # | Finding | Fix |
+| --- | --- | --- |
+| 1 | **An over-rounded shape is not a shape.** Pebble shipped as 46 / 56 / 42 / 58 percent. Two corners share every edge, so the top edge asked for 102% and the left edge for 104% of the icon. Compose does not clamp this; the outline degenerates, and on device that is a clip with nothing left inside it. The settings chip still drew *something* (a circle), which is why it looked fine in the picker. | Corner radii are now data (`IconCorners`), Pebble is 46 / 50 / 42 / 50, and `IconCorners.fits()` is asserted in a unit test for every rounded shape. |
+| 2 | **The placeholder was invisible.** A tile with no bitmap drew a `surfaceVariant` square — the exact colour of the dock pill — so an icon that was still decoding, or that failed, made the dock look empty rather than busy. | The tile now shows the app's initial on `surfaceContainerHighest`. A missing icon is legible from now on. |
+| 3 | **One stalled decode could freeze every icon.** `IconCache.load` held one of two semaphore permits across an unbounded `getActivityIcon` call, and only caught `Exception`. | The decode is bounded at 4 s and catches `Throwable`, so one bad drawable can no longer starve the queue. |
+| 4 | **Icons re-decoded on every size change.** The cache key used the exact pixel size. | Sizes are bucketed to 8 px, and the dock and Frequent icons are preloaded as soon as the app list arrives, so the home screen never opens on placeholders. |
+| 5 | **The widget picker leaked ids and failed silently.** A cancelled pick never released the reserved `AppWidgetHost` id, and a pick that returned no id did nothing at all. | Reserved ids are released on cancel, a bound id is verified with `getAppWidgetInfo` before it is stored, and both failure paths now say so. |
 
 ## Customisation added
 

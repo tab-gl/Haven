@@ -3,7 +3,7 @@
 Haven is a lightweight Android launcher that pairs Material 3 colour and expressive-style rounded shapes with spring motion and a restrained, Nothing-style layout. It is built to stay smooth on low-end (1–3 GB RAM) devices.
 
 - **Application ID:** `app.tab.home`
-- **Version:** 0.8.0
+- **Version:** 0.8.1
 - **Minimum Android:** 8.0 (API 26) · **ABIs:** `armeabi-v7a`, `arm64-v8a`
 - **Stack:** Java host (activity + native clock) with Kotlin/Compose UI
 

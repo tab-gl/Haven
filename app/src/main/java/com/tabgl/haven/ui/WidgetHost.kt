@@ -47,6 +47,9 @@ class HavenWidgets(private val context: Context) {
         putExtra("appWidgetId", id)
     }
 
+    /** True when the system has a provider bound to this id. */
+    fun isBound(id: Int): Boolean = runCatching { manager.getAppWidgetInfo(id) != null }.getOrDefault(false)
+
     fun createView(id: Int): AppWidgetHostView? {
         val info = runCatching { manager.getAppWidgetInfo(id) }.getOrNull() ?: return null
         return runCatching { host.createView(context.applicationContext, id, info) }.getOrNull()

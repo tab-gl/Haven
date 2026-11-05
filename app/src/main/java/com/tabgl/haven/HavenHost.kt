@@ -39,6 +39,7 @@ import androidx.compose.ui.draw.clipToBounds
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.input.nestedscroll.nestedScroll
 import androidx.compose.ui.layout.onSizeChanged
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.ComposeView
 import androidx.compose.ui.platform.LocalContext
 import androidx.lifecycle.Lifecycle
@@ -56,6 +57,7 @@ import com.tabgl.haven.ui.HavenTheme
 import com.tabgl.haven.ui.HavenWidgets
 import com.tabgl.haven.ui.HomeScreen
 import com.tabgl.haven.ui.LaunchZoom
+import com.tabgl.haven.ui.Metrics
 import com.tabgl.haven.ui.LocalIconCache
 import com.tabgl.haven.ui.SettingsSheet
 import com.tabgl.haven.ui.motionSpecFor
@@ -194,17 +196,46 @@ private fun HavenScreen(
         )
     }
 
+    // Warm the dock and Frequent icons before they are first drawn, so the home screen never opens
+    // on a row of placeholders while eight decodes queue up behind the first frame.
+    val iconCache = LocalIconCache.current
+    val density = LocalDensity.current
+    LaunchedEffect(dock, frequent, settings.iconScale, settings.iconStyle) {
+        val dockPx = with(density) { Metrics.dockIcon(settings.iconScale).roundToPx() }
+        val frequentPx = with(density) { Metrics.frequentIcon(settings.iconScale).roundToPx() }
+        withContext(Dispatchers.IO) {
+            dock.forEach { iconCache.load(it, dockPx, settings.iconStyle) }
+            frequent.forEach { iconCache.load(it, frequentPx, settings.iconStyle) }
+        }
+    }
+
     val widgetLabels = remember(settings.widgets) { settings.widgets.map { it.id to widgets.labelOf(it.id) } }
     val pages = settings.pages.coerceIn(1, 4)
     val pagerState = rememberPagerState(pageCount = { pages })
 
     // The system picker binds the widget for us: Haven only has to reserve the id first.
+    var pendingWidgetId by remember { mutableStateOf<Int?>(null) }
     val widgetPicker = rememberLauncherForActivityResult(
         ActivityResultContracts.StartActivityForResult()
     ) { result ->
+        val reserved = pendingWidgetId
+        pendingWidgetId = null
         val id = widgets.boundIdFrom(result.resultCode, result.data)
-        if (id != null) {
-            scope.launch { preferences.addWidget(id, pagerState.currentPage) }
+        when {
+            id != null && widgets.isBound(id) ->
+                scope.launch { preferences.addWidget(id, pagerState.currentPage) }
+            id != null -> {
+                // The picker claimed a widget but the system did not actually bind it.
+                widgets.releaseId(id)
+                toast(context, "That widget could not be added")
+            }
+            else -> {
+                // Backed out, or an OEM picker that returns no id: never leak the reserved slot.
+                reserved?.let { widgets.releaseId(it) }
+                if (result.resultCode == android.app.Activity.RESULT_OK) {
+                    toast(context, "The system picker returned no widget")
+                }
+            }
         }
     }
 
@@ -315,8 +346,10 @@ private fun HavenScreen(
                     if (id == null) {
                         toast(context, "Could not reserve a widget slot")
                     } else {
+                        pendingWidgetId = id
                         runCatching { widgetPicker.launch(widgets.pickerIntent(id)) }
                             .onFailure {
+                                pendingWidgetId = null
                                 widgets.releaseId(id)
                                 toast(context, "No widget picker on this device")
                             }

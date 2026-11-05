@@ -15,6 +15,7 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.sync.Semaphore
 import kotlinx.coroutines.sync.withPermit
 import kotlinx.coroutines.withContext
+import kotlinx.coroutines.withTimeoutOrNull
 
 /**
  * Memory-bounded icon cache. Icons are decoded off the main thread, two at a time, at the exact
@@ -39,14 +40,24 @@ class IconCache(context: Context) {
 
     fun peek(key: String, sizePx: Int, style: String): ImageBitmap? = cache.get(cacheKey(key, sizePx, style))
 
+    /**
+     * Decodes one icon, or null when it could not be produced.
+     *
+     * The decode is bounded: a package manager that stalls would otherwise hold one of the two
+     * permits for ever and leave every other icon stuck behind it, which looks like an empty dock
+     * rather than a slow one.
+     */
     suspend fun load(app: LauncherApp, sizePx: Int, style: String): ImageBitmap? {
         val cacheKey = cacheKey(app.key, sizePx, style)
         cache.get(cacheKey)?.let { return it }
-        return gate.withPermit {
-            cache.get(cacheKey) ?: withContext(Dispatchers.Default) {
-                render(app, sizePx, style)?.also { cache.put(cacheKey, it) }
+        val loaded = withTimeoutOrNull(LOAD_TIMEOUT_MS) {
+            gate.withPermit {
+                cache.get(cacheKey) ?: withContext(Dispatchers.Default) {
+                    render(app, sizePx, style)?.also { cache.put(cacheKey, it) }
+                }
             }
         }
+        return loaded ?: cache.get(cacheKey)
     }
 
     fun clear() = cache.evictAll()
@@ -61,10 +72,15 @@ class IconCache(context: Context) {
 
     private fun cacheKey(key: String, sizePx: Int, style: String): String = "$key@$sizePx@$style"
 
+    private companion object {
+        const val LOAD_TIMEOUT_MS = 4_000L
+    }
+
     private fun render(app: LauncherApp, px: Int, style: String): ImageBitmap? = try {
         val drawable = packageManager.getActivityIcon(ComponentName(app.packageName, app.activityName))
         toBitmap(drawable, px, style).asImageBitmap()
-    } catch (e: Exception) {
+    } catch (t: Throwable) {
+        // A broken drawable must never take the launcher down with it.
         null
     }
 
