@@ -3,7 +3,7 @@
 Haven is a lightweight Android launcher that pairs Material 3 colour and expressive-style rounded shapes with spring motion and a restrained, Nothing-style layout. It is built to stay smooth on low-end (1–3 GB RAM) devices.
 
 - **Application ID:** `app.tab.home`
-- **Version:** 0.8.1
+- **Version:** 0.9.0
 - **Minimum Android:** 8.0 (API 26) · **ABIs:** `armeabi-v7a`, `arm64-v8a`
 - **Stack:** Java host (activity + native clock) with Kotlin/Compose UI
 
@@ -66,6 +66,7 @@ Everything below is live-previewed in the settings sheet (long-press the home sc
 | Search sources | calculator · contacts · files (each permission-gated) |
 | Wallpaper | set from gallery · system wallpaper picker |
 | Motion | animations on/off · Zoom/Fade/Off · Pixel/One UI/Classic · Fast/Normal/Calm · haptics |
+| Performance | Auto / Lean / Full — device-aware icon cache, decode concurrency and page pre-composition |
 | Also | hidden-apps manager, one-tap reset to defaults |
 
 ## Why it stays light
@@ -86,4 +87,4 @@ Locally: JDK 17, Android SDK 36, Gradle 8.13 — `gradle :app:testDebugUnitTest 
 
 Free-form widget placement and drag-and-drop, folders, icon packs, themed (monochrome) icons, backup/restore, gesture editor. Device profiling on 2 GB hardware is still required before claiming performance numbers.
 
-See [`docs/AUDIT.md`](docs/AUDIT.md) for the 0.6.0 review and [`docs/MVP.md`](docs/MVP.md) for status.
+See [`docs/PERFORMANCE.md`](docs/PERFORMANCE.md) for the performance architecture, [`docs/AUDIT.md`](docs/AUDIT.md) for the review history and [`docs/MVP.md`](docs/MVP.md) for status.

@@ -50,6 +50,8 @@ import com.tabgl.haven.data.IconCache
 import com.tabgl.haven.data.LauncherApp
 import com.tabgl.haven.data.LauncherPreferences
 import com.tabgl.haven.data.LauncherSettings
+import com.tabgl.haven.data.PerformanceProfiles
+import com.tabgl.haven.data.Profile
 import com.tabgl.haven.ui.AppActions
 import com.tabgl.haven.ui.AppDrawer
 import com.tabgl.haven.ui.DrawerController
@@ -89,14 +91,21 @@ private fun HavenRoot() {
     val appContext = remember(activityContext) { activityContext.applicationContext }
     val preferences = remember(appContext) { LauncherPreferences(appContext) }
     val repository = remember(appContext) { AppRepository(appContext) }
-    val iconCache = remember(appContext) { IconCache(appContext) }
+    val initialSettings = remember(preferences) { preferences.readBlocking() }
+    val settings by preferences.settings.collectAsState(initial = initialSettings)
+
+    // Device-aware profile: the same design language, less memory spent on it. Built after the
+    // settings read so a "lean"/"full" override is honoured before the first icon is decoded.
+    val profile = remember(settings.performanceMode, appContext) {
+        PerformanceProfiles.resolve(appContext, settings.performanceMode)
+    }
+    val traits = remember(profile, appContext) { PerformanceProfiles.traits(appContext, profile) }
+    val iconCache = remember(appContext, traits) { IconCache(appContext, traits) }
     val widgets = remember(appContext) { HavenWidgets(appContext) }
     DisposableEffect(widgets) {
         widgets.startListening()
         onDispose { widgets.stopListening() }
     }
-    val initialSettings = remember(preferences) { preferences.readBlocking() }
-    val settings by preferences.settings.collectAsState(initial = initialSettings)
 
     var apps by remember { mutableStateOf(emptyList<LauncherApp>()) }
     var defaultDock by remember { mutableStateOf(emptyList<String>()) }
@@ -116,7 +125,7 @@ private fun HavenRoot() {
 
     CompositionLocalProvider(LocalIconCache provides iconCache) {
         HavenTheme(settings) {
-            HavenScreen(settings, preferences, apps, defaultDock, widgets)
+            HavenScreen(settings, preferences, apps, defaultDock, widgets, traits)
         }
     }
 }
@@ -128,7 +137,8 @@ private fun HavenScreen(
     preferences: LauncherPreferences,
     apps: List<LauncherApp>,
     defaultDock: List<String>,
-    widgets: HavenWidgets
+    widgets: HavenWidgets,
+    traits: com.tabgl.haven.data.PerfTraits
 ) {
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
@@ -200,7 +210,8 @@ private fun HavenScreen(
     // on a row of placeholders while eight decodes queue up behind the first frame.
     val iconCache = LocalIconCache.current
     val density = LocalDensity.current
-    LaunchedEffect(dock, frequent, settings.iconScale, settings.iconStyle) {
+    LaunchedEffect(dock, frequent, settings.iconScale, settings.iconStyle, traits) {
+        if (!traits.preloadDock) return@LaunchedEffect
         val dockPx = with(density) { Metrics.dockIcon(settings.iconScale).roundToPx() }
         val frequentPx = with(density) { Metrics.frequentIcon(settings.iconScale).roundToPx() }
         withContext(Dispatchers.IO) {
@@ -285,6 +296,7 @@ private fun HavenScreen(
                 widgets = widgets,
                 widgetRefs = settings.widgets,
                 pagerState = pagerState,
+                beyondViewportPages = traits.beyondViewportPages,
                 modifier = Modifier
                     .fillMaxSize()
                     .graphicsLayer {
@@ -340,6 +352,7 @@ private fun HavenScreen(
                 hiddenApps = hiddenApps,
                 preferences = preferences,
                 versionName = versionName(context),
+                profile = traits.profile,
                 widgetLabels = widgetLabels,
                 onAddWidget = {
                     val id = widgets.allocateId()

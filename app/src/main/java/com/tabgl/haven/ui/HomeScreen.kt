@@ -62,6 +62,7 @@ fun HomeScreen(
     widgets: HavenWidgets,
     widgetRefs: List<WidgetRef>,
     pagerState: PagerState,
+    beyondViewportPages: Int = 1,
     modifier: Modifier = Modifier
 ) {
     val context = LocalContext.current
@@ -117,7 +118,7 @@ fun HomeScreen(
         HorizontalPager(
             state = pagerState,
             modifier = Modifier.weight(1f),
-            beyondViewportPageCount = 1
+            beyondViewportPageCount = beyondViewportPages
         ) { page ->
             Column(
                 Modifier

@@ -58,6 +58,8 @@ data class LauncherSettings(
     /** "fast" | "normal" | "calm" */
     val motionSpeed: String = "normal",
     val haptics: Boolean = true,
+    /** "auto" | "lean" | "full" — see [PerformanceProfiles]. */
+    val performanceMode: String = "auto",
     /** "google" | "duckduckgo" | "brave" */
     val searchEngine: String = "google",
     val searchCalculator: Boolean = true,
@@ -106,6 +108,7 @@ class LauncherPreferences(context: Context) {
         val motionFeel = stringPreferencesKey("motion_feel")
         val motionSpeed = stringPreferencesKey("motion_speed")
         val haptics = booleanPreferencesKey("haptics")
+        val performanceMode = stringPreferencesKey("performance_mode")
         val searchEngine = stringPreferencesKey("search_engine")
         val searchCalculator = booleanPreferencesKey("search_calculator")
         val searchContacts = booleanPreferencesKey("search_contacts")
@@ -149,6 +152,7 @@ class LauncherPreferences(context: Context) {
             motionFeel = prefs[Keys.motionFeel].oneOf(MOTION_FEELS, "pixel"),
             motionSpeed = prefs[Keys.motionSpeed].oneOf(MOTION_SPEEDS, "normal"),
             haptics = prefs[Keys.haptics] ?: true,
+            performanceMode = prefs[Keys.performanceMode].oneOf(PERFORMANCE_MODES, "auto"),
             searchEngine = prefs[Keys.searchEngine].oneOf(SEARCH_ENGINES, "google"),
             searchCalculator = prefs[Keys.searchCalculator] ?: true,
             searchContacts = prefs[Keys.searchContacts] ?: false,
@@ -192,6 +196,8 @@ class LauncherPreferences(context: Context) {
     suspend fun setMotionFeel(value: String) = store.edit { it[Keys.motionFeel] = value.oneOf(MOTION_FEELS, "pixel") }
     suspend fun setMotionSpeed(value: String) = store.edit { it[Keys.motionSpeed] = value.oneOf(MOTION_SPEEDS, "normal") }
     suspend fun setHaptics(value: Boolean) = store.edit { it[Keys.haptics] = value }
+    suspend fun setPerformanceMode(value: String) =
+        store.edit { it[Keys.performanceMode] = value.oneOf(PERFORMANCE_MODES, "auto") }
     suspend fun setSearchEngine(value: String) = store.edit { it[Keys.searchEngine] = value.oneOf(SEARCH_ENGINES, "google") }
     suspend fun setSearchCalculator(value: Boolean) = store.edit { it[Keys.searchCalculator] = value }
     suspend fun setSearchContacts(value: Boolean) = store.edit { it[Keys.searchContacts] = value }
@@ -260,6 +266,7 @@ class LauncherPreferences(context: Context) {
         val MOTION_SPEEDS = setOf("fast", "normal", "calm")
         val SEARCH_ENGINES = setOf("google", "duckduckgo", "brave")
         val MOTION_FEELS = setOf("pixel", "oneui", "classic")
+        val PERFORMANCE_MODES = setOf("auto", "lean", "full")
 
         private fun decodeList(raw: String): List<String> = raw.split('\n').filter { it.isNotBlank() }
 

@@ -58,6 +58,7 @@ import com.tabgl.haven.data.DeviceSearch
 import com.tabgl.haven.data.LauncherApp
 import com.tabgl.haven.data.LauncherPreferences
 import com.tabgl.haven.data.LauncherSettings
+import com.tabgl.haven.data.Profile
 import com.tabgl.haven.data.Wallpapers
 import kotlin.math.roundToInt
 import kotlinx.coroutines.launch
@@ -87,6 +88,7 @@ fun SettingsSheet(
     hiddenApps: List<LauncherApp>,
     preferences: LauncherPreferences,
     versionName: String,
+    profile: Profile,
     widgetLabels: List<Pair<Int, String>>,
     onAddWidget: () -> Unit,
     onRemoveWidget: (Int) -> Unit
@@ -453,6 +455,29 @@ fun SettingsSheet(
                 selected = settings.motionSpeed
             ) { value -> scope.launch { preferences.setMotionSpeed(value) } }
         }
+        Divider()
+
+        // ---- Performance ------------------------------------------------------
+        SectionHeader("Performance")
+        Segmented(
+            options = listOf("auto" to "Auto", "lean" to "Lean", "full" to "Full"),
+            selected = settings.performanceMode
+        ) { value -> scope.launch { preferences.setPerformanceMode(value) } }
+        Text(
+            when (profile) {
+                Profile.LEAN ->
+                    "Lean: 2 MB icon cache, one decode at a time, 144 px icons, no preload and one " +
+                        "less page composed."
+                Profile.STANDARD ->
+                    "Full: larger icon cache, two decodes at a time, 192 px icons, dock preloaded " +
+                        "and the next page kept ready."
+            } + " Auto follows the device's own low-RAM flag.",
+            style = MaterialTheme.typography.bodySmall,
+            color = colors.onSurfaceVariant
+        )
+
+        Divider()
+
         SwitchRow(
             title = "Haptics",
             subtitle = "A tick when you long-press an icon",

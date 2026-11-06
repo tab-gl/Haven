@@ -1,6 +1,6 @@
 # Haven status
 
-## Shipped (0.8.1)
+## Shipped (0.9.0)
 
 - HOME activity (`singleTask`), regular launcher entry, Home-press collapses drawer/settings and
   plays the close transition
@@ -23,6 +23,7 @@
   and three icon styles (masked, natural, plate)
 - iOS-style open/close transition (zoom or fade, three speeds, master switch), a lifting launch
   tile and press feedback
+- Device-aware performance profiles (Lean / Full) with trim-memory eviction
 - Unit tests for search ranking, usage encoding, dock planning and motion specs; CI runs tests,
   debug APKs and an R8 release build
 
