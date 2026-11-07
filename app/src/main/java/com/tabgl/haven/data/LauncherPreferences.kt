@@ -51,10 +51,6 @@ data class LauncherSettings(
     /** 60..100 — opacity of the app drawer over the wallpaper. */
     val drawerOpacity: Int = 94,
     val animations: Boolean = true,
-    /** "zoom" | "fade" | "none" */
-    val motionStyle: String = "zoom",
-    /** "pixel" | "oneui" | "classic" — the shape of the spring, not just its speed. */
-    val motionFeel: String = "pixel",
     /** "fast" | "normal" | "calm" */
     val motionSpeed: String = "normal",
     val haptics: Boolean = true,
@@ -104,8 +100,6 @@ class LauncherPreferences(context: Context) {
         val dockBackground = booleanPreferencesKey("dock_background")
         val drawerOpacity = intPreferencesKey("drawer_opacity")
         val animations = booleanPreferencesKey("animations")
-        val motionStyle = stringPreferencesKey("motion_style")
-        val motionFeel = stringPreferencesKey("motion_feel")
         val motionSpeed = stringPreferencesKey("motion_speed")
         val haptics = booleanPreferencesKey("haptics")
         val performanceMode = stringPreferencesKey("performance_mode")
@@ -148,8 +142,6 @@ class LauncherPreferences(context: Context) {
             dockBackground = prefs[Keys.dockBackground] ?: true,
             drawerOpacity = (prefs[Keys.drawerOpacity] ?: 94).coerceIn(60, 100),
             animations = prefs[Keys.animations] ?: true,
-            motionStyle = prefs[Keys.motionStyle].oneOf(MOTION_STYLES, "zoom"),
-            motionFeel = prefs[Keys.motionFeel].oneOf(MOTION_FEELS, "pixel"),
             motionSpeed = prefs[Keys.motionSpeed].oneOf(MOTION_SPEEDS, "normal"),
             haptics = prefs[Keys.haptics] ?: true,
             performanceMode = prefs[Keys.performanceMode].oneOf(PERFORMANCE_MODES, "auto"),
@@ -192,8 +184,6 @@ class LauncherPreferences(context: Context) {
     suspend fun setDockBackground(value: Boolean) = store.edit { it[Keys.dockBackground] = value }
     suspend fun setDrawerOpacity(value: Int) = store.edit { it[Keys.drawerOpacity] = value.coerceIn(60, 100) }
     suspend fun setAnimations(value: Boolean) = store.edit { it[Keys.animations] = value }
-    suspend fun setMotionStyle(value: String) = store.edit { it[Keys.motionStyle] = value.oneOf(MOTION_STYLES, "zoom") }
-    suspend fun setMotionFeel(value: String) = store.edit { it[Keys.motionFeel] = value.oneOf(MOTION_FEELS, "pixel") }
     suspend fun setMotionSpeed(value: String) = store.edit { it[Keys.motionSpeed] = value.oneOf(MOTION_SPEEDS, "normal") }
     suspend fun setHaptics(value: Boolean) = store.edit { it[Keys.haptics] = value }
     suspend fun setPerformanceMode(value: String) =
@@ -262,10 +252,8 @@ class LauncherPreferences(context: Context) {
         )
         val ICON_STYLES = setOf("masked", "natural", "plate")
         val SCALES = setOf("compact", "normal", "large")
-        val MOTION_STYLES = setOf("zoom", "fade", "none")
         val MOTION_SPEEDS = setOf("fast", "normal", "calm")
         val SEARCH_ENGINES = setOf("google", "duckduckgo", "brave")
-        val MOTION_FEELS = setOf("pixel", "oneui", "classic")
         val PERFORMANCE_MODES = setOf("auto", "lean", "full")
 
         private fun decodeList(raw: String): List<String> = raw.split('\n').filter { it.isNotBlank() }

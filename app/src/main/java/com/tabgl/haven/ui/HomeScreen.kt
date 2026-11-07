@@ -58,7 +58,6 @@ fun HomeScreen(
     actions: AppActions,
     onOpenDrawer: (focusSearch: Boolean) -> Unit,
     onOpenSettings: () -> Unit,
-    zoom: LaunchZoom,
     widgets: HavenWidgets,
     widgetRefs: List<WidgetRef>,
     pagerState: PagerState,
@@ -123,16 +122,16 @@ fun HomeScreen(
             Column(
                 Modifier
                     .fillMaxSize()
-                    // Parallax slide: the outgoing page drifts, shrinks and dims as the next one
-                    // comes in. Read inside the layer, so paging never recomposes the page content.
+                    // Parallax slide: the outgoing page drifts and shrinks as the next one comes in.
+                    // Transform only — animating the alpha of a whole page would force an offscreen
+                    // buffer for every frame of the swipe, which is what makes paging stutter.
                     .graphicsLayer {
                         val offset = (pagerState.currentPage - page) + pagerState.currentPageOffsetFraction
                         val distance = abs(offset).coerceIn(0f, 1f)
-                        alpha = 1f - 0.45f * distance
-                        val scale = 1f - 0.07f * distance
+                        val scale = 1f - 0.06f * distance
                         scaleX = scale
                         scaleY = scale
-                        translationX = size.width * 0.18f * offset
+                        translationX = size.width * 0.16f * offset
                     }
             ) {
                 if (page == 0) {
@@ -219,7 +218,6 @@ fun HomeScreen(
                                     actions = actions,
                                     haptics = settings.haptics,
                                     iconStyle = settings.iconStyle,
-                                    zoom = zoom,
                                     modifier = Modifier.weight(1f)
                                 )
                             }
@@ -268,7 +266,6 @@ fun HomeScreen(
                     actions = actions,
                     haptics = settings.haptics,
                     iconStyle = settings.iconStyle,
-                    zoom = zoom,
                     modifier = Modifier.weight(1f)
                 )
             }

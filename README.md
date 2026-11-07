@@ -3,7 +3,7 @@
 Haven is a lightweight Android launcher that pairs Material 3 colour and expressive-style rounded shapes with spring motion and a restrained, Nothing-style layout. It is built to stay smooth on low-end (1–3 GB RAM) devices.
 
 - **Application ID:** `app.tab.home`
-- **Version:** 0.9.0
+- **Version:** 0.10.0
 - **Minimum Android:** 8.0 (API 26) · **ABIs:** `armeabi-v7a`, `arm64-v8a`
 - **Stack:** Java host (activity + native clock) with Kotlin/Compose UI
 
@@ -34,21 +34,21 @@ legacy non-adaptive icons match the rest of the grid.
 
 ### Motion
 
-Three **feels**, modelled on the launchers people ask for by name:
+Haven plays **no app launch or close animation**. A launcher that runs its own transition before
+calling `startActivity` is adding latency to the one interaction that has to feel instant — the
+earlier build waited for a spring to reach 50% before launching, a 90–160 ms tax on every app you
+open. Android already has a window transition; Haven gets out of its way.
 
-| Feel | What it does |
-| --- | --- |
-| **Pixel** | Springy. The tapped icon grows a long way towards the app, the surface barely fades, and the return settles with a little bounce. |
-| **One UI** | Crisp. Smaller scale, more fade, higher stiffness, almost no bounce — a snap rather than a glide. |
-| **Classic** | Haven's original softer fade. |
+What is left is the motion a launcher actually owns:
 
-- **Open:** the launcher zooms out of the icon you tapped — that tile lifts as the rest of the
-  surface zooms past it — and the app takes over mid-transition.
-- **iOS-style close:** returning runs the same value back to 0, so the launcher springs back in from
-  the icon with a little bounce rather than cutting in.
-- **Press feedback:** icons dip and spring back on touch instead of flashing a ripple.
-- Three styles (Zoom / Fade / Off), three speeds (Fast / Normal / Calm) and a master switch, so
-  motion can be turned off entirely for accessibility or battery.
+- the drawer sheet, following your finger 1:1 and settling on one spring
+- the home receding behind it, by scale
+- the pager sliding sideways with a parallax offset
+- an icon dipping to 92% under your finger and springing back
+
+All of it is transforms and solid-colour alpha. Nothing animates the alpha of a full-screen layer,
+because that forces an offscreen buffer (`saveLayer`) on every frame of the animation — the most
+common reason a Compose launcher drops frames.
 
 ### Customisation
 
@@ -65,7 +65,7 @@ Everything below is live-previewed in the settings sheet (long-press the home sc
 | Pages & widgets | 1–4 home pages · add and remove hosted widgets |
 | Search sources | calculator · contacts · files (each permission-gated) |
 | Wallpaper | set from gallery · system wallpaper picker |
-| Motion | animations on/off · Zoom/Fade/Off · Pixel/One UI/Classic · Fast/Normal/Calm · haptics |
+| Motion | animations on/off · Snappy/Balanced/Relaxed springs · haptics |
 | Performance | Auto / Lean / Full — device-aware icon cache, decode concurrency and page pre-composition |
 | Also | hidden-apps manager, one-tap reset to defaults |
 

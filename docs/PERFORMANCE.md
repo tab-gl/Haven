@@ -68,8 +68,24 @@ The user can override it — **Customise → Performance → Auto / Lean / Full*
 
 A launcher that ignores trim signals is a launcher the system kills, and being killed is the one thing that reliably makes a home screen feel slow.
 
+## Motion and the frame budget
+
+The 0.10.0 motion pass is a frame-budget change, not a taste change:
+
+- `startActivity` fires on the tap frame. Deferring it behind a spring cost 90–160 ms per launch.
+- No layer animates its alpha any more. A full-screen layer with `alpha < 1` composites through
+  `saveLayer`, which allocates an offscreen texture every frame — the pager, the home recede and the
+  drawer all did this while moving.
+- The icon press runs on an `Animatable` read inside `graphicsLayer`, so a press costs a layer
+  update rather than a recomposition of the tile.
+
 ## What is still not done, and why
 
 - **Baseline profiles.** `profileinstaller` is already a dependency and applies the profiles shipped inside Compose, but Haven has no profile of its own. Generating one needs a macrobenchmark run on a device — it cannot be produced from a build machine.
 - **JankStats / Perfetto numbers.** Both need hardware. Adding the dependency without a device to read it from would be decoration.
+- **A native (Rust/C++) module.** Haven has no native code and nothing CPU-bound enough to justify
+  any: the only compute on the hot path is app-label ranking, which is well under a millisecond for
+  a few hundred apps. A `.so` would add size to every ABI and an NDK toolchain to CI to save time
+  that is not being spent. The frame drops came from `saveLayer` and a deferred launch, both fixed
+  above.
 - **Cold-start measurement.** The current design reads DataStore once on the main thread before the first frame, deliberately, to avoid a theme flash. Whether that is under a second on a 1 GB device is a measurement, not a decision.

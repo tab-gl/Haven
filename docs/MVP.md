@@ -1,6 +1,6 @@
 # Haven status
 
-## Shipped (0.9.0)
+## Shipped (0.10.0)
 
 - HOME activity (`singleTask`), regular launcher entry, Home-press collapses drawer/settings and
   plays the close transition
@@ -21,8 +21,8 @@
 - Motion feels: Pixel, One UI and Classic presets
 - Eight icon shapes (corner radii validated by unit test) (superellipse squircle, circle, rounded, cut, teardrop, pebble, arch, hexagon)
   and three icon styles (masked, natural, plate)
-- iOS-style open/close transition (zoom or fade, three speeds, master switch), a lifting launch
-  tile and press feedback
+- Launcher-side launch transition removed: apps open on the tap frame. Motion is the drawer,
+  the pager and the icon press dip, all transform-only
 - Device-aware performance profiles (Lean / Full) with trim-memory eviction
 - Unit tests for search ranking, usage encoding, dock planning and motion specs; CI runs tests,
   debug APKs and an R8 release build

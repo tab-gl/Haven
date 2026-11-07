@@ -1,4 +1,4 @@
-# Haven audit — 0.5.0 → 0.8.1
+# Haven audit — 0.5.0 → 0.10.0
 
 A read-through of the 0.5.0 source, what was wrong, and what changed. Every item below is either
 fixed in this release or explicitly left alone with a reason.
@@ -104,6 +104,21 @@ pill and its height but showed no icons at all.
 | 3 | **One stalled decode could freeze every icon.** `IconCache.load` held one of two semaphore permits across an unbounded `getActivityIcon` call, and only caught `Exception`. | The decode is bounded at 4 s and catches `Throwable`, so one bad drawable can no longer starve the queue. |
 | 4 | **Icons re-decoded on every size change.** The cache key used the exact pixel size. | Sizes are bucketed to 8 px, and the dock and Frequent icons are preloaded as soon as the app list arrives, so the home screen never opens on placeholders. |
 | 5 | **The widget picker leaked ids and failed silently.** A cancelled pick never released the reserved `AppWidgetHost` id, and a pick that returned no id did nothing at all. | Reserved ids are released on cancel, a bound id is verified with `getAppWidgetInfo` before it is stored, and both failure paths now say so. |
+
+## 0.10.0 — the launch animation is gone, and so is its lag
+
+The launcher-side open/close transition was removed outright. It was the wrong trade: `startActivity`
+was deferred until the spring reached 50%, so every app launch paid 90–160 ms of extra latency, and
+the transition itself faded and scaled the whole surface.
+
+| # | Finding | Fix |
+| --- | --- | --- |
+| 1 | **The launch transition was the lag.** `LaunchZoom` fired `startActivity` at 45–55% of a spring; on the Balanced preset that is roughly 110 ms of dead time before the app window even starts opening. | Deleted. `startActivity` runs on the tap frame. Android's own window transition is the transition. |
+| 2 | **Full-surface alpha forced an offscreen buffer.** The pager faded each page (`alpha = 1 - 0.45·d`), the home faded behind the drawer (`alpha = 1 - 0.55·p`) and the drawer faded in (`alpha = p`). An alpha below 1 on a layer makes Compose composite it through `saveLayer` — a full-screen texture allocation per frame, on every frame of a swipe. | All three are transform-only now. The drawer's own background hides the home, and a single solid-colour rectangle provides the dim. |
+| 3 | **Every tile registered a layout callback.** `AppEntry` used `onGloballyPositioned` to report its centre for the zoom origin — a layout-phase callback for every icon on screen. | Removed with the transition. |
+| 4 | **Press feedback recomposed the tile.** `animateFloatAsState` was read in composition, so a press re-ran the tile (and its icon) on every animation frame. | An `Animatable` read inside `graphicsLayer`: the dip animates with zero recomposition. |
+| 5 | **The drawer left fractional offsets behind.** `animate` stops within the spring's visibility threshold, not exactly on the target. | The settle writes the exact target after the animation, so the drawer is never 0.4% open. |
+| 6 | **Motion settings had nothing left to control.** `motionStyle` (zoom/fade/none) and `motionFeel` (pixel/oneui/classic) described a transition that no longer exists. | Removed. `motionSpeed` survives as the drawer/pager spring: Snappy / Balanced / Relaxed. |
 
 ## Customisation added
 

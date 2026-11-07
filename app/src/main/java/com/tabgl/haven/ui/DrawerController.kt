@@ -24,6 +24,13 @@ class DrawerController(private val scope: CoroutineScope) {
     var progress by mutableFloatStateOf(0f)
         private set
 
+    /** The spring the drawer settles on, updated when the motion settings change. */
+    private var spec: MotionSpec = MotionSpec(enabled = true, stiffness = 430f, damping = 0.88f)
+
+    fun updateSpec(spec: MotionSpec) {
+        this.spec = spec
+    }
+
     var autoFocusSearch by mutableStateOf(false)
         private set
 
@@ -64,13 +71,19 @@ class DrawerController(private val scope: CoroutineScope) {
 
     private fun animateTo(target: Float, velocity: Float) {
         job?.cancel()
+        if (!spec.enabled) {
+            progress = target
+            return
+        }
         job = scope.launch {
             animate(
                 initialValue = progress,
                 targetValue = target,
                 initialVelocity = velocity,
-                animationSpec = spring(dampingRatio = 0.82f, stiffness = 380f)
+                animationSpec = spring(dampingRatio = spec.damping, stiffness = spec.stiffness)
             ) { value, _ -> progress = value.coerceIn(0f, 1f) }
+            // Land exactly on the target so the drawer never leaves a fractional offset behind.
+            progress = target
         }
     }
 

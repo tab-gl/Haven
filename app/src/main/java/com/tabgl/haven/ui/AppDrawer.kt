@@ -77,7 +77,6 @@ fun AppDrawer(
     actions: AppActions,
     autoFocusSearch: Boolean,
     onClose: () -> Unit,
-    zoom: LaunchZoom,
     modifier: Modifier = Modifier
 ) {
     val context = LocalContext.current
@@ -166,7 +165,7 @@ fun AppDrawer(
                 keyboardActions = KeyboardActions(onGo = {
                     val first = results.firstOrNull()
                     when {
-                        first != null -> actions.launch(first, null)
+                        first != null -> actions.launch(first)
                         trimmed.isNotBlank() -> searchWeb(context, trimmed, settings.searchEngine)
                     }
                 }),
@@ -255,8 +254,7 @@ fun AppDrawer(
                         actions = actions,
                         labelLines = settings.labelLines,
                         haptics = settings.haptics,
-                        iconStyle = settings.iconStyle,
-                        zoom = zoom
+                        iconStyle = settings.iconStyle
                     )
                 }
             }

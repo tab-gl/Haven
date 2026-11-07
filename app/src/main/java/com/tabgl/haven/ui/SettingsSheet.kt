@@ -425,35 +425,22 @@ fun SettingsSheet(
         SectionHeader("Motion")
         SwitchRow(
             title = "Animations",
-            subtitle = "iOS-style open and close transitions",
+            subtitle = "Drawer, page and press motion",
             checked = settings.animations,
             onChange = { scope.launch { preferences.setAnimations(it) } }
         )
         if (settings.animations) {
-            SubHeader("App open and close")
+            SubHeader("Speed")
             Segmented(
-                options = listOf("zoom" to "Zoom", "fade" to "Fade", "none" to "Off"),
-                selected = settings.motionStyle
-            ) { value -> scope.launch { preferences.setMotionStyle(value) } }
-            SubHeader("Feel")
-            Segmented(
-                options = listOf("pixel" to "Pixel", "oneui" to "One UI", "classic" to "Classic"),
-                selected = settings.motionFeel
-            ) { value -> scope.launch { preferences.setMotionFeel(value) } }
+                options = listOf("fast" to "Snappy", "normal" to "Balanced", "calm" to "Relaxed"),
+                selected = settings.motionSpeed
+            ) { value -> scope.launch { preferences.setMotionSpeed(value) } }
             Text(
-                when (settings.motionFeel) {
-                    "oneui" -> "Crisp and fast: small scale, quick fade, no bounce."
-                    "classic" -> "The original Haven transition: softer, more fade."
-                    else -> "Springy: the icon grows towards the app, the surface barely fades."
-                },
+                "Apps open straight away — the launcher plays no transition of its own. What moves " +
+                    "here is the drawer, the pages and the icon dip.",
                 style = MaterialTheme.typography.bodySmall,
                 color = colors.onSurfaceVariant
             )
-            SubHeader("Speed")
-            Segmented(
-                options = listOf("fast" to "Fast", "normal" to "Normal", "calm" to "Calm"),
-                selected = settings.motionSpeed
-            ) { value -> scope.launch { preferences.setMotionSpeed(value) } }
         }
         Divider()
 

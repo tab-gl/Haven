@@ -36,6 +36,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clipToBounds
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.input.nestedscroll.nestedScroll
 import androidx.compose.ui.layout.onSizeChanged
@@ -58,12 +59,10 @@ import com.tabgl.haven.ui.DrawerController
 import com.tabgl.haven.ui.HavenTheme
 import com.tabgl.haven.ui.HavenWidgets
 import com.tabgl.haven.ui.HomeScreen
-import com.tabgl.haven.ui.LaunchZoom
 import com.tabgl.haven.ui.Metrics
 import com.tabgl.haven.ui.LocalIconCache
 import com.tabgl.haven.ui.SettingsSheet
 import com.tabgl.haven.ui.motionSpecFor
-import com.tabgl.haven.ui.surfaceZoom
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.collectLatest
@@ -143,10 +142,8 @@ private fun HavenScreen(
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
     val drawer = remember { DrawerController(scope) }
-    val zoom = remember { LaunchZoom(scope) }
-    val motion = remember(settings.animations, settings.motionStyle, settings.motionSpeed, settings.motionFeel) {
-        motionSpecFor(settings)
-    }
+    val motion = remember(settings.animations, settings.motionSpeed) { motionSpecFor(settings) }
+    LaunchedEffect(motion) { drawer.updateSpec(motion) }
     var settingsOpen by remember { mutableStateOf(false) }
     var heightPx by remember { mutableFloatStateOf(1f) }
 
@@ -167,18 +164,17 @@ private fun HavenScreen(
     val currentDockKeys by rememberUpdatedState(dock.map { it.key })
     val dockSlots = settings.dockSlots
 
-    val actions = remember(context, preferences, scope, drawer, zoom, motion, dockSlots) {
+    val actions = remember(context, preferences, scope, drawer, dockSlots) {
         AppActions(
-            launch = { app, origin ->
-                // iOS-style open: the launcher zooms into the icon, then the app takes over.
-                zoom.open(app.key, origin, motion) {
-                    val intent = Intent(Intent.ACTION_MAIN)
-                        .addCategory(Intent.CATEGORY_LAUNCHER)
-                        .setClassName(app.packageName, app.activityName)
-                        .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_RESET_TASK_IF_NEEDED)
-                    val started = runCatching { context.startActivity(intent) }.isSuccess
-                    if (started) scope.launch { preferences.recordLaunch(app.key) }
-                    started
+            // Straight to the app on the tap frame. No launcher-side transition: Android's own
+            // window animation is the transition, and any delay we add is latency the user feels.
+            launch = { app ->
+                val intent = Intent(Intent.ACTION_MAIN)
+                    .addCategory(Intent.CATEGORY_LAUNCHER)
+                    .setClassName(app.packageName, app.activityName)
+                    .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_RESET_TASK_IF_NEEDED)
+                if (runCatching { context.startActivity(intent) }.isSuccess) {
+                    scope.launch { preferences.recordLaunch(app.key) }
                 }
             },
             info = { app ->
@@ -252,11 +248,11 @@ private fun HavenScreen(
 
     val drawerVisible by remember { derivedStateOf { drawer.progress > 0.001f } }
 
-    // Coming back from an app: collapse whatever was open and play the close transition.
+    // Coming back from an app: collapse whatever was open. The drawer slides away rather than
+    // snapping, so the return reads as the launcher settling rather than a jump cut.
     LifecycleEventEffect(Lifecycle.Event.ON_RESUME) {
         if (settingsOpen) settingsOpen = false
-        if (drawer.progress > 0f) drawer.snapTo(0f)
-        if (zoom.progress > 0f) zoom.settleBack(motion)
+        if (drawer.progress > 0.001f) drawer.close()
     }
 
     val homeTick = HavenSignals.homeTick
@@ -282,8 +278,7 @@ private fun HavenScreen(
             .background(scrim)
             .onSizeChanged { heightPx = it.height.toFloat().coerceAtLeast(1f) }
     ) {
-        // Home and drawer share one zoom layer so the transition works from either surface.
-        Box(Modifier.fillMaxSize().surfaceZoom(zoom, motion)) {
+        Box(Modifier.fillMaxSize()) {
             HomeScreen(
                 settings = settings,
                 dock = dock,
@@ -292,7 +287,6 @@ private fun HavenScreen(
                 actions = actions,
                 onOpenDrawer = { focusSearch -> drawer.open(focusSearch) },
                 onOpenSettings = { settingsOpen = true },
-                zoom = zoom,
                 widgets = widgets,
                 widgetRefs = settings.widgets,
                 pagerState = pagerState,
@@ -300,10 +294,10 @@ private fun HavenScreen(
                 modifier = Modifier
                     .fillMaxSize()
                     .graphicsLayer {
-                        // The home recedes into the distance as the drawer sheet comes up.
+                        // The home recedes as the drawer sheet comes up — scale only. Fading the
+                        // home would put the whole screen in an offscreen buffer on every frame.
                         val p = drawer.progress
                         val recede = 1f - 0.06f * p
-                        alpha = 1f - 0.55f * p
                         scaleX = recede
                         scaleY = recede
                         translationY = -size.height * 0.02f * p
@@ -316,6 +310,14 @@ private fun HavenScreen(
             )
 
             if (drawerVisible) {
+                // A single solid rectangle, not a faded copy of the home: one quad to blend, and
+                // it gives the drawer something to sit on in both themes.
+                Box(
+                    Modifier
+                        .fillMaxSize()
+                        .graphicsLayer { alpha = (drawer.progress * 0.38f).coerceIn(0f, 1f) }
+                        .background(Color.Black)
+                )
                 AppDrawer(
                     apps = visible,
                     settings = settings,
@@ -323,15 +325,14 @@ private fun HavenScreen(
                     actions = actions,
                     autoFocusSearch = drawer.autoFocusSearch,
                     onClose = { drawer.close() },
-                    zoom = zoom,
                     modifier = Modifier
                         .fillMaxSize()
                         .clipToBounds()
                         .graphicsLayer {
+                            // Slide and scale only: the drawer's own background is what hides the
+                            // home, so nothing here needs an offscreen buffer.
                             val p = drawer.progress
-                            alpha = p.coerceIn(0f, 1f)
-                            translationY = (1f - p) * size.height * 0.12f
-                            // A whisper of scale makes the drawer feel like a sheet, not a slab.
+                            translationY = (1f - p) * size.height * 0.14f
                             val s = 0.965f + 0.035f * p
                             scaleX = s
                             scaleY = s

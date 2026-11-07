@@ -9,82 +9,52 @@ import org.junit.Test
 class MotionSpecTest {
 
     @Test
-    fun defaultsToThePixelFeel() {
+    fun defaultsToABalancedSpring() {
         val spec = motionSpecFor(LauncherSettings())
         assertTrue(spec.enabled)
-        assertEquals(MotionSpec.ZOOM, spec.mode)
         assertEquals(430f, spec.stiffness, 0.01f)
-        assertEquals(0.90f, spec.lift, 0.001f)
+        assertEquals(0.88f, spec.damping, 0.001f)
     }
 
     @Test
     fun masterSwitchTurnsMotionOff() {
         val spec = motionSpecFor(LauncherSettings(animations = false))
         assertFalse(spec.enabled)
-        assertEquals(MotionSpec.NONE, spec.mode)
-        assertEquals(0f, spec.lift, 0.001f)
-    }
-
-    @Test
-    fun styleNoneTurnsMotionOff() {
-        assertFalse(motionSpecFor(LauncherSettings(motionStyle = "none")).enabled)
-    }
-
-    @Test
-    fun fadeStyleIsKept() {
-        val spec = motionSpecFor(LauncherSettings(motionStyle = "fade"))
-        assertTrue(spec.enabled)
-        assertEquals(MotionSpec.FADE, spec.mode)
-    }
-
-    @Test
-    fun unknownStyleFallsBackToZoom() {
-        assertEquals(MotionSpec.ZOOM, motionSpecFor(LauncherSettings(motionStyle = "wobble")).mode)
+        assertEquals(0f, spec.stiffness, 0.001f)
     }
 
     @Test
     fun speedChangesStiffness() {
-        val fast = motionSpecFor(LauncherSettings(motionSpeed = "fast"))
-        val normal = motionSpecFor(LauncherSettings(motionSpeed = "normal"))
-        val calm = motionSpecFor(LauncherSettings(motionSpeed = "calm"))
-        assertTrue(fast.stiffness > normal.stiffness)
-        assertTrue(normal.stiffness > calm.stiffness)
+        val snappy = motionSpecFor(LauncherSettings(motionSpeed = "fast"))
+        val balanced = motionSpecFor(LauncherSettings(motionSpeed = "normal"))
+        val relaxed = motionSpecFor(LauncherSettings(motionSpeed = "calm"))
+        assertTrue(snappy.stiffness > balanced.stiffness)
+        assertTrue(balanced.stiffness > relaxed.stiffness)
+        // Faster springs need more damping to settle without overshoot.
+        assertTrue(snappy.damping > relaxed.damping)
     }
 
     @Test
-    fun oneUiIsCrisperThanPixel() {
-        val pixel = motionSpecFor(LauncherSettings(motionFeel = "pixel"))
-        val oneUi = motionSpecFor(LauncherSettings(motionFeel = "oneui"))
-        // Stiffer, less bounce, smaller scale, more fade, less icon growth.
-        assertTrue(oneUi.stiffness > pixel.stiffness)
-        assertTrue(oneUi.closeDamping > pixel.closeDamping)
-        assertTrue(oneUi.zoomGain < pixel.zoomGain)
-        assertTrue(oneUi.fade > pixel.fade)
-        assertTrue(oneUi.lift < pixel.lift)
-        assertTrue(oneUi.launchAt < pixel.launchAt)
-    }
-
-    @Test
-    fun classicIsSofterThanPixel() {
-        val pixel = motionSpecFor(LauncherSettings(motionFeel = "pixel"))
-        val classic = motionSpecFor(LauncherSettings(motionFeel = "classic"))
-        assertTrue(classic.stiffness < pixel.stiffness)
-        assertTrue(classic.fade > pixel.fade)
-    }
-
-    @Test
-    fun unknownFeelFallsBackToPixel() {
+    fun unknownSpeedFallsBackToBalanced() {
         assertEquals(
-            motionSpecFor(LauncherSettings(motionFeel = "pixel")).stiffness,
-            motionSpecFor(LauncherSettings(motionFeel = "nonsense")).stiffness,
+            motionSpecFor(LauncherSettings(motionSpeed = "normal")).stiffness,
+            motionSpecFor(LauncherSettings(motionSpeed = "warp")).stiffness,
             0.01f
         )
     }
 
     @Test
-    fun fadeIsNeverTotalSoTheReturnDoesNotCutFromBlack() {
-        LauncherSettings(motionFeel = "oneui").let { settings ->
-            assertTrue(motionSpecFor(settings).fade < 1f)
+    fun everySpringIsDampedEnoughToNotWobble() {
+        for (speed in listOf("fast", "normal", "calm")) {
+            val spec = motionSpecFor(LauncherSettings(motionSpeed = speed))
+            assertTrue("$speed should not overshoot", spec.damping >= 0.8f)
         }
+    }
+
+    @Test
+    fun thePressIsMuchSnappierThanTheDrawer() {
+        val panel = motionSpecFor(LauncherSettings())
+        assertTrue(MotionSpec.PRESS_STIFFNESS > panel.stiffness * 2f)
+        assertTrue(MotionSpec.PRESS_SCALE < 1f)
     }
 }
