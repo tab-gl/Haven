@@ -24,6 +24,13 @@ class DrawerController(private val scope: CoroutineScope) {
     var progress by mutableFloatStateOf(0f)
         private set
 
+    /** The spring the drawer settles on, updated when the motion settings change. */
+    private var spec: MotionSpec = MotionSpec(enabled = true, stiffness = 430f, damping = 0.88f)
+
+    fun updateSpec(spec: MotionSpec) {
+        this.spec = spec
+    }
+
     var autoFocusSearch by mutableStateOf(false)
         private set
 
@@ -32,6 +39,12 @@ class DrawerController(private val scope: CoroutineScope) {
     fun dragBy(delta: Float) {
         job?.cancel()
         progress = (progress + delta).coerceIn(0f, 1f)
+    }
+
+    /** Jumps without animating — used when an app launch takes over the screen. */
+    fun snapTo(value: Float) {
+        job?.cancel()
+        progress = value.coerceIn(0f, 1f)
     }
 
     fun open(focusSearch: Boolean = false) {
@@ -58,28 +71,31 @@ class DrawerController(private val scope: CoroutineScope) {
 
     private fun animateTo(target: Float, velocity: Float) {
         job?.cancel()
+        if (!spec.enabled) {
+            progress = target
+            return
+        }
         job = scope.launch {
             animate(
                 initialValue = progress,
                 targetValue = target,
                 initialVelocity = velocity,
-                animationSpec = spring(dampingRatio = 0.82f, stiffness = 380f)
+                animationSpec = spring(dampingRatio = spec.damping, stiffness = spec.stiffness)
             ) { value, _ -> progress = value.coerceIn(0f, 1f) }
+            // Land exactly on the target so the drawer never leaves a fractional offset behind.
+            progress = target
         }
     }
 
-    /** Lets a scrolling list inside the drawer hand over-scroll to the drawer (pull down to close). */
+    /**
+     * Lets a scrolling list inside the drawer hand over-scroll to the drawer (pull down to close).
+     *
+     * Only *unconsumed* downward scroll is taken. The old implementation also grabbed upward
+     * scroll before the grid saw it, which made the top of the list feel stuck.
+     */
     fun connection(heightPx: () -> Float): NestedScrollConnection = object : NestedScrollConnection {
-        override fun onPreScroll(available: Offset, source: NestedScrollSource): Offset {
-            if (available.y < 0f && progress in 0.001f..0.999f) {
-                dragBy(-available.y / heightPx())
-                return Offset(0f, available.y)
-            }
-            return Offset.Zero
-        }
-
         override fun onPostScroll(consumed: Offset, available: Offset, source: NestedScrollSource): Offset {
-            if (available.y > 0f && source == NestedScrollSource.UserInput) {
+            if (available.y > 0f) {
                 dragBy(-available.y / heightPx())
                 return Offset(0f, available.y)
             }

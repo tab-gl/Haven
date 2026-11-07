@@ -1,7 +1,11 @@
 package com.tabgl.haven.ui
 
+import androidx.compose.animation.core.Animatable
+import androidx.compose.animation.core.spring
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.combinedClickable
+import androidx.compose.foundation.interaction.MutableInteractionSource
+import androidx.compose.foundation.interaction.collectIsPressedAsState
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -13,6 +17,7 @@ import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.Stable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -21,6 +26,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.hapticfeedback.HapticFeedbackType
 import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.compose.ui.semantics.contentDescription
@@ -52,19 +58,39 @@ fun AppEntry(
     inDock: Boolean,
     actions: AppActions,
     modifier: Modifier = Modifier,
-    labelLines: Int = 1
+    labelLines: Int = 1,
+    haptics: Boolean = true,
+    iconStyle: String = "masked"
 ) {
     var menuOpen by remember { mutableStateOf(false) }
     val haptic = LocalHapticFeedback.current
+    val interaction = remember { MutableInteractionSource() }
+    val pressed by interaction.collectIsPressedAsState()
+
+    // The dip is an Animatable read inside graphicsLayer, so a press animates without a single
+    // recomposition of the tile or its icon.
+    val press = remember { Animatable(1f) }
+    LaunchedEffect(pressed) {
+        press.animateTo(
+            targetValue = if (pressed) MotionSpec.PRESS_SCALE else 1f,
+            animationSpec = spring(
+                dampingRatio = MotionSpec.PRESS_DAMPING,
+                stiffness = MotionSpec.PRESS_STIFFNESS
+            )
+        )
+    }
+
     Box(modifier) {
         Column(
             Modifier
                 .fillMaxWidth()
                 .clip(RoundedCornerShape(20.dp))
                 .combinedClickable(
+                    interactionSource = interaction,
+                    indication = null,
                     onClick = { actions.launch(app) },
                     onLongClick = {
-                        haptic.performHapticFeedback(HapticFeedbackType.LongPress)
+                        if (haptics) haptic.performHapticFeedback(HapticFeedbackType.LongPress)
                         menuOpen = true
                     }
                 )
@@ -73,7 +99,16 @@ fun AppEntry(
             horizontalAlignment = Alignment.CenterHorizontally,
             verticalArrangement = Arrangement.spacedBy(7.dp)
         ) {
-            AppIcon(app, iconSize, shapeName)
+            AppIcon(
+                app = app,
+                size = iconSize,
+                shapeName = shapeName,
+                style = iconStyle,
+                modifier = Modifier.graphicsLayer {
+                    scaleX = press.value
+                    scaleY = press.value
+                }
+            )
             if (showLabel) {
                 Text(
                     app.label,

@@ -1,6 +1,12 @@
 package com.tabgl.haven.ui
 
+import android.content.Context
+import android.content.Intent
+import android.net.Uri
 import android.os.Build
+import android.widget.Toast
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -10,14 +16,20 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.ExperimentalLayoutApi
 import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.verticalScroll
+import androidx.compose.material3.Button
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.FilterChip
+import androidx.compose.material3.HorizontalDivider
+import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.SegmentedButton
 import androidx.compose.material3.SegmentedButtonDefaults
@@ -29,21 +41,45 @@ import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableFloatStateOf
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.unit.dp
+import com.tabgl.haven.data.DeviceSearch
 import com.tabgl.haven.data.LauncherApp
 import com.tabgl.haven.data.LauncherPreferences
 import com.tabgl.haven.data.LauncherSettings
+import com.tabgl.haven.data.Profile
+import com.tabgl.haven.data.Wallpapers
 import kotlin.math.roundToInt
 import kotlinx.coroutines.launch
+
+private val PALETTES = listOf(
+    "aurora" to "Aurora",
+    "ocean" to "Ocean",
+    "sunset" to "Sunset",
+    "lavender" to "Lavender",
+    "mono" to "Mono"
+)
+
+private val ACCENTS = listOf(
+    "auto" to "Auto",
+    "lime" to "Lime",
+    "blue" to "Blue",
+    "coral" to "Coral",
+    "violet" to "Violet"
+)
+
+private val ICON_SCALES = listOf("compact" to "Small", "normal" to "Normal", "large" to "Large")
 
 @OptIn(ExperimentalMaterial3Api::class, ExperimentalLayoutApi::class)
 @Composable
@@ -51,134 +87,463 @@ fun SettingsSheet(
     settings: LauncherSettings,
     hiddenApps: List<LauncherApp>,
     preferences: LauncherPreferences,
-    versionName: String
+    versionName: String,
+    profile: Profile,
+    widgetLabels: List<Pair<Int, String>>,
+    onAddWidget: () -> Unit,
+    onRemoveWidget: (Int) -> Unit
 ) {
     val scope = rememberCoroutineScope()
+    val context = LocalContext.current
     val colors = MaterialTheme.colorScheme
     val monetAvailable = Build.VERSION.SDK_INT >= Build.VERSION_CODES.S
     val monetActive = monetAvailable && settings.monetEnabled
-    var columns by remember(settings.columns) { mutableFloatStateOf(settings.columns.toFloat()) }
+    var confirmReset by remember { mutableStateOf(false) }
+
+    val contactPermission = rememberLauncherForActivityResult(
+        ActivityResultContracts.RequestPermission()
+    ) { granted ->
+        scope.launch { preferences.setSearchContacts(granted) }
+        if (!granted) toast(context, "Contact search needs permission")
+    }
+    val filePermissions = rememberLauncherForActivityResult(
+        ActivityResultContracts.RequestMultiplePermissions()
+    ) { result ->
+        val granted = result.values.any { it }
+        scope.launch { preferences.setSearchFiles(granted) }
+        if (!granted) toast(context, "File search needs media permission")
+    }
+    val wallpaperPicker = rememberLauncherForActivityResult(
+        ActivityResultContracts.PickVisualMedia()
+    ) { uri ->
+        if (uri != null) {
+            scope.launch {
+                val ok = Wallpapers.setFromUri(context, uri)
+                toast(context, if (ok) "Home screen wallpaper updated" else "Could not set that image")
+            }
+        }
+    }
 
     Column(
         Modifier
             .fillMaxWidth()
             .verticalScroll(rememberScrollState())
             .padding(horizontal = 24.dp)
-            .padding(bottom = 36.dp),
-        verticalArrangement = Arrangement.spacedBy(16.dp)
+            .padding(bottom = 40.dp),
+        verticalArrangement = Arrangement.spacedBy(14.dp)
     ) {
-        Text("Make it yours", style = MaterialTheme.typography.headlineMedium)
+        Column {
+            Text("Make it yours", style = MaterialTheme.typography.headlineMedium)
+            Text(
+                "Every change applies live",
+                style = MaterialTheme.typography.bodySmall,
+                color = colors.onSurfaceVariant
+            )
+        }
 
-        SectionTitle("Appearance")
+        // ---- Appearance -------------------------------------------------------
+        SectionHeader("Appearance")
         Segmented(
             options = listOf("system" to "System", "light" to "Light", "dark" to "Dark"),
             selected = settings.themeMode
         ) { value -> scope.launch { preferences.setThemeMode(value) } }
 
+        SwitchRow(
+            title = "Pure black",
+            subtitle = "True-black surfaces in dark mode",
+            checked = settings.amoled,
+            enabled = settings.themeMode != "light",
+            onChange = { scope.launch { preferences.setAmoled(it) } }
+        )
         if (monetAvailable) {
-            SwitchRow("Monet colours", "Follow your wallpaper's colours", settings.monetEnabled) {
-                scope.launch { preferences.setMonetEnabled(it) }
-            }
-        }
-
-        SectionTitle("Palette")
-        FlowRow(
-            horizontalArrangement = Arrangement.spacedBy(8.dp),
-            verticalArrangement = Arrangement.spacedBy(8.dp)
-        ) {
-            listOf(
-                "aurora" to "Aurora", "ocean" to "Ocean", "sunset" to "Sunset",
-                "lavender" to "Lavender", "mono" to "Mono"
-            ).forEach { (value, label) ->
-                FilterChip(
-                    selected = !monetActive && settings.palette == value,
-                    onClick = {
-                        scope.launch {
-                            preferences.setPalette(value)
-                            preferences.setMonetEnabled(false)
-                        }
-                    },
-                    label = { Text(label) },
-                    leadingIcon = {
-                        Box(Modifier.size(14.dp).clip(CircleShape).background(paletteSwatch(value)))
-                    }
-                )
-            }
-        }
-        if (!monetActive && settings.palette == "aurora") {
-            Row(horizontalArrangement = Arrangement.spacedBy(14.dp)) {
-                listOf("lime", "blue", "coral", "violet").forEach { name ->
-                    val selected = settings.accent == name
-                    Box(
-                        Modifier
-                            .size(40.dp)
-                            .clip(CircleShape)
-                            .background(accentColor(name))
-                            .then(
-                                if (selected) Modifier.border(3.dp, colors.onSurface, CircleShape) else Modifier
-                            )
-                            .semantics { contentDescription = "$name accent" }
-                            .clickable(role = Role.RadioButton) {
-                                scope.launch { preferences.setAccent(name) }
-                            }
-                    )
-                }
-            }
-        }
-        SwitchRow("Show wallpaper", "Let your wallpaper through the home screen", settings.showWallpaper) {
-            scope.launch { preferences.setShowWallpaper(it) }
-        }
-
-        SectionTitle("Icons")
-        Segmented(
-            options = listOf("squircle" to "Squircle", "circle" to "Circle", "rounded" to "Round", "square" to "Cut"),
-            selected = settings.iconShape
-        ) { value -> scope.launch { preferences.setIconShape(value) } }
-        SwitchRow("App labels", "Show names below icons", settings.showLabels) {
-            scope.launch { preferences.setShowLabels(it) }
-        }
-        SwitchRow("Compact icons", "Smaller icons, more breathing room", settings.compactIcons) {
-            scope.launch { preferences.setCompactIcons(it) }
-        }
-        Column {
-            Row(verticalAlignment = Alignment.CenterVertically) {
-                Text("App grid", style = MaterialTheme.typography.titleSmall, modifier = Modifier.weight(1f))
-                Text(
-                    "${columns.roundToInt()} columns",
-                    color = colors.primary,
-                    style = MaterialTheme.typography.labelLarge
-                )
-            }
-            Slider(
-                value = columns,
-                onValueChange = { columns = it },
-                onValueChangeFinished = { scope.launch { preferences.setColumns(columns.roundToInt()) } },
-                valueRange = 3f..6f,
-                steps = 2
+            SwitchRow(
+                title = "Monet colours",
+                subtitle = "Follow your wallpaper's palette",
+                checked = settings.monetEnabled,
+                onChange = { scope.launch { preferences.setMonetEnabled(it) } }
             )
         }
 
+        SubHeader("Palette")
+        PaletteChips(
+            options = PALETTES,
+            selected = if (monetActive) "" else settings.palette
+        ) { value ->
+            scope.launch {
+                preferences.setPalette(value)
+                preferences.setMonetEnabled(false)
+            }
+        }
+
+        SubHeader("Accent")
+        Swatches(
+            options = ACCENTS.map { (value, label) ->
+                value to (if (value == "auto") paletteSwatch(settings.palette) else accentColor(value) ?: paletteSwatch(settings.palette))
+            },
+            selected = settings.accent,
+            labels = ACCENTS.toMap()
+        ) { value -> scope.launch { preferences.setAccent(value) } }
+
+        Divider()
+
+        // ---- Home screen ------------------------------------------------------
+        SectionHeader("Home screen")
+        SwitchRow(
+            title = "Wallpaper",
+            subtitle = "Let your wallpaper through the home screen",
+            checked = settings.showWallpaper,
+            onChange = { scope.launch { preferences.setShowWallpaper(it) } }
+        )
+        if (settings.showWallpaper) {
+            SliderRow(
+                title = "Wallpaper dim",
+                value = settings.wallpaperDim,
+                range = 0..85,
+                label = { "$it%" }
+            ) { scope.launch { preferences.setWallpaperDim(it) } }
+        }
+
+        SubHeader("Change wallpaper")
+        Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+            Button(
+                onClick = {
+                    wallpaperPicker.launch(
+                        androidx.activity.result.PickVisualMediaRequest(
+                            ActivityResultContracts.PickVisualMedia.ImageOnly
+                        )
+                    )
+                },
+                modifier = Modifier.weight(1f)
+            ) { Text("From gallery") }
+            Button(
+                onClick = { openWallpaperPicker(context) },
+                modifier = Modifier.weight(1f)
+            ) { Text("System") }
+        }
+        Text(
+            "Sets the home screen only, so your lock screen stays put.",
+            style = MaterialTheme.typography.bodySmall,
+            color = colors.onSurfaceVariant
+        )
+        SwitchRow(
+            title = "Haven wordmark",
+            subtitle = "Show the name in the top corner",
+            checked = settings.showBrand,
+            onChange = { scope.launch { preferences.setShowBrand(it) } }
+        )
+        SwitchRow(
+            title = "Clock",
+            subtitle = "Tap it to open alarms",
+            checked = settings.showClock,
+            onChange = { scope.launch { preferences.setShowClock(it) } }
+        )
+        if (settings.showClock) {
+            SubHeader("Clock size")
+            Segmented(options = ICON_SCALES, selected = settings.clockScale) { value ->
+                scope.launch { preferences.setClockScale(value) }
+            }
+        }
+        SwitchRow(
+            title = "Search bar",
+            subtitle = "Show the search pill above the dock",
+            checked = settings.showSearchPill,
+            onChange = { scope.launch { preferences.setShowSearchPill(it) } }
+        )
+
+        Divider()
+
+        // ---- Dock & Frequent --------------------------------------------------
+        SectionHeader("Dock and Frequent row")
+        StepperRow(
+            title = "Dock slots",
+            subtitle = "How many icons fit in the dock",
+            value = settings.dockSlots,
+            range = 3..5
+        ) { scope.launch { preferences.setDockSlots(it) } }
+        SwitchRow(
+            title = "Dock background",
+            subtitle = "The rounded pill behind the dock",
+            checked = settings.dockBackground,
+            onChange = { scope.launch { preferences.setDockBackground(it) } }
+        )
+        SwitchRow(
+            title = "Frequent row",
+            subtitle = "Your most launched apps, ranked by real use",
+            checked = settings.showFrequent,
+            onChange = { scope.launch { preferences.setShowFrequent(it) } }
+        )
+        if (settings.showFrequent) {
+            StepperRow(
+                title = "Frequent slots",
+                subtitle = "Zero hides the row entirely",
+                value = settings.frequentCount,
+                range = 0..5
+            ) { scope.launch { preferences.setFrequentCount(it) } }
+        }
+
+        Divider()
+
+        // ---- Icons & grid -----------------------------------------------------
+        SectionHeader("Icons and grid")
+        SubHeader("Icon shape")
+        ShapeChips(selected = settings.iconShape) { value ->
+            scope.launch { preferences.setIconShape(value) }
+        }
+
+        SubHeader("Icon style")
+        Segmented(
+            options = listOf("masked" to "Masked", "natural" to "Natural", "plate" to "Plate"),
+            selected = settings.iconStyle
+        ) { value -> scope.launch { preferences.setIconStyle(value) } }
+        Text(
+            when (settings.iconStyle) {
+                "natural" -> "Icons keep their own shape; the shape above is not applied."
+                "plate" -> "Artwork sits inset on a tinted tile, so legacy icons match."
+                else -> "Artwork is cropped to the shape above."
+            },
+            style = MaterialTheme.typography.bodySmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant
+        )
+
+        SubHeader("Icon size")
+        Segmented(options = ICON_SCALES, selected = settings.iconScale) { value ->
+            scope.launch { preferences.setIconScale(value) }
+        }
+
+        SwitchRow(
+            title = "App labels",
+            subtitle = "Show names below icons",
+            checked = settings.showLabels,
+            onChange = { scope.launch { preferences.setShowLabels(it) } }
+        )
+        if (settings.showLabels) {
+            StepperRow(
+                title = "Label lines",
+                subtitle = "In the app drawer",
+                value = settings.labelLines,
+                range = 1..2
+            ) { scope.launch { preferences.setLabelLines(it) } }
+        }
+        SliderRow(
+            title = "Drawer columns",
+            value = settings.columns,
+            range = 3..6,
+            label = { if (it == 1) "1 column" else "$it columns" }
+        ) { scope.launch { preferences.setColumns(it) } }
+
+        Divider()
+
+        // ---- Pages & widgets --------------------------------------------------
+        SectionHeader("Pages and widgets")
+        StepperRow(
+            title = "Home pages",
+            subtitle = "Swipe sideways; widgets live on the page you add them to",
+            value = settings.pages,
+            range = 1..4
+        ) { scope.launch { preferences.setPages(it) } }
+        Text(
+            "Widgets",
+            style = MaterialTheme.typography.titleSmall
+        )
+        Text(
+            "Real Android widgets, hosted on the home screen",
+            style = MaterialTheme.typography.bodySmall,
+            color = colors.onSurfaceVariant
+        )
+        Button(onClick = onAddWidget, modifier = Modifier.fillMaxWidth()) { Text("Add widget") }
+        if (widgetLabels.isEmpty()) {
+            Text(
+                "No widgets added yet.",
+                style = MaterialTheme.typography.bodySmall,
+                color = colors.onSurfaceVariant
+            )
+        } else {
+            widgetLabels.forEach { (id, label) ->
+                Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+                    Text(label, modifier = Modifier.weight(1f), style = MaterialTheme.typography.bodyLarge, maxLines = 1)
+                    TextButton(onClick = { onRemoveWidget(id) }) { Text("Remove") }
+                }
+            }
+        }
+
+        Divider()
+
+        // ---- Drawer -----------------------------------------------------------
+        SectionHeader("App drawer")
+        SliderRow(
+            title = "Drawer opacity",
+            value = settings.drawerOpacity,
+            range = 60..100,
+            label = { "$it%" }
+        ) { scope.launch { preferences.setDrawerOpacity(it) } }
+        SubHeader("Web search")
+        ChipGroup(
+            options = listOf("google" to "Google", "duckduckgo" to "DuckDuckGo", "brave" to "Brave"),
+            selected = settings.searchEngine
+        ) { value -> scope.launch { preferences.setSearchEngine(value) } }
+
+        SubHeader("Search sources")
+        SwitchRow(
+            title = "Calculator",
+            subtitle = "Type 12*7 and the result appears above the apps",
+            checked = settings.searchCalculator,
+            onChange = { scope.launch { preferences.setSearchCalculator(it) } }
+        )
+        SwitchRow(
+            title = "Contacts",
+            subtitle = "Names and numbers from your address book",
+            checked = settings.searchContacts,
+            onChange = { wanted ->
+                if (!wanted) {
+                    scope.launch { preferences.setSearchContacts(false) }
+                } else if (DeviceSearch.contactsGranted(context)) {
+                    scope.launch { preferences.setSearchContacts(true) }
+                } else {
+                    contactPermission.launch(android.Manifest.permission.READ_CONTACTS)
+                }
+            }
+        )
+        SwitchRow(
+            title = "Files",
+            subtitle = "Photos, videos and audio by name",
+            checked = settings.searchFiles,
+            onChange = { wanted ->
+                if (!wanted) {
+                    scope.launch { preferences.setSearchFiles(false) }
+                } else if (DeviceSearch.filesGranted(context)) {
+                    scope.launch { preferences.setSearchFiles(true) }
+                } else {
+                    filePermissions.launch(DeviceSearch.filePermissions())
+                }
+            }
+        )
+
+
+        Divider()
+
+        // ---- Motion -----------------------------------------------------------
+        SectionHeader("Motion")
+        SwitchRow(
+            title = "Animations",
+            subtitle = "Drawer, page and press motion",
+            checked = settings.animations,
+            onChange = { scope.launch { preferences.setAnimations(it) } }
+        )
+        if (settings.animations) {
+            SubHeader("Speed")
+            Segmented(
+                options = listOf("fast" to "Snappy", "normal" to "Balanced", "calm" to "Relaxed"),
+                selected = settings.motionSpeed
+            ) { value -> scope.launch { preferences.setMotionSpeed(value) } }
+            Text(
+                "Apps open straight away — the launcher plays no transition of its own. What moves " +
+                    "here is the drawer, the pages and the icon dip.",
+                style = MaterialTheme.typography.bodySmall,
+                color = colors.onSurfaceVariant
+            )
+        }
+        Divider()
+
+        // ---- Performance ------------------------------------------------------
+        SectionHeader("Performance")
+        Segmented(
+            options = listOf("auto" to "Auto", "lean" to "Lean", "full" to "Full"),
+            selected = settings.performanceMode
+        ) { value -> scope.launch { preferences.setPerformanceMode(value) } }
+        Text(
+            when (profile) {
+                Profile.LEAN ->
+                    "Lean: 2 MB icon cache, one decode at a time, 144 px icons, no preload and one " +
+                        "less page composed."
+                Profile.STANDARD ->
+                    "Full: larger icon cache, two decodes at a time, 192 px icons, dock preloaded " +
+                        "and the next page kept ready."
+            } + " Auto follows the device's own low-RAM flag.",
+            style = MaterialTheme.typography.bodySmall,
+            color = colors.onSurfaceVariant
+        )
+
+        Divider()
+
+        SwitchRow(
+            title = "Haptics",
+            subtitle = "A tick when you long-press an icon",
+            checked = settings.haptics,
+            onChange = { scope.launch { preferences.setHaptics(it) } }
+        )
+
+        // ---- Hidden apps ------------------------------------------------------
         if (hiddenApps.isNotEmpty()) {
-            SectionTitle("Hidden apps")
+            Divider()
+            SectionHeader("Hidden apps")
             hiddenApps.forEach { app ->
                 Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
-                    Text(app.label, modifier = Modifier.weight(1f), style = MaterialTheme.typography.bodyLarge)
+                    Text(
+                        app.label,
+                        modifier = Modifier.weight(1f),
+                        style = MaterialTheme.typography.bodyLarge,
+                        maxLines = 1
+                    )
                     TextButton(onClick = { scope.launch { preferences.unhide(app.key) } }) { Text("Show") }
                 }
             }
         }
 
-        Text(
-            "Haven $versionName · long-press apps to pin, hide or uninstall",
-            style = MaterialTheme.typography.labelSmall,
-            color = colors.onSurfaceVariant
-        )
+        Divider()
+
+        // ---- Footer -----------------------------------------------------------
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            Column(Modifier.weight(1f)) {
+                Text(
+                    "Haven $versionName",
+                    style = MaterialTheme.typography.labelMedium,
+                    color = colors.onSurfaceVariant
+                )
+                Text(
+                    "Long-press an app to pin, hide or uninstall",
+                    style = MaterialTheme.typography.labelSmall,
+                    color = colors.onSurfaceVariant
+                )
+            }
+            TextButton(
+                onClick = {
+                    if (confirmReset) {
+                        scope.launch { preferences.resetAll() }
+                        confirmReset = false
+                    } else {
+                        confirmReset = true
+                    }
+                }
+            ) {
+                Text(if (confirmReset) "Tap again to reset" else "Reset")
+            }
+        }
+        Spacer(Modifier.height(8.dp))
     }
 }
 
 @Composable
-private fun SectionTitle(text: String) {
-    Text(text, style = MaterialTheme.typography.titleMedium, color = MaterialTheme.colorScheme.primary)
+private fun SectionHeader(text: String) {
+    Text(
+        text,
+        style = MaterialTheme.typography.titleMedium,
+        color = MaterialTheme.colorScheme.primary,
+        modifier = Modifier.padding(top = 6.dp)
+    )
+}
+
+@Composable
+private fun SubHeader(text: String) {
+    Text(
+        text,
+        style = MaterialTheme.typography.labelMedium,
+        color = MaterialTheme.colorScheme.onSurfaceVariant
+    )
+}
+
+@Composable
+private fun Divider() {
+    HorizontalDivider(color = MaterialTheme.colorScheme.outline.copy(alpha = 0.35f))
 }
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -201,8 +566,119 @@ private fun Segmented(
     }
 }
 
+@OptIn(ExperimentalLayoutApi::class)
 @Composable
-private fun SwitchRow(title: String, subtitle: String, checked: Boolean, onChange: (Boolean) -> Unit) {
+private fun ChipGroup(
+    options: List<Pair<String, String>>,
+    selected: String,
+    onSelect: (String) -> Unit
+) {
+    FlowRow(
+        horizontalArrangement = Arrangement.spacedBy(8.dp),
+        verticalArrangement = Arrangement.spacedBy(8.dp)
+    ) {
+        options.forEach { (value, label) ->
+            FilterChip(
+                selected = value == selected,
+                onClick = { onSelect(value) },
+                label = { Text(label) }
+            )
+        }
+    }
+}
+
+@OptIn(ExperimentalLayoutApi::class)
+@Composable
+private fun ShapeChips(selected: String, onSelect: (String) -> Unit) {
+    FlowRow(
+        horizontalArrangement = Arrangement.spacedBy(8.dp),
+        verticalArrangement = Arrangement.spacedBy(8.dp)
+    ) {
+        IconShapes.NAMES.forEach { (value, label) ->
+            FilterChip(
+                selected = value == selected,
+                onClick = { onSelect(value) },
+                label = { Text(label) },
+                leadingIcon = {
+                    // Each chip previews the shape it selects.
+                    Box(
+                        Modifier
+                            .size(16.dp)
+                            .clip(IconShapes.of(value))
+                            .background(MaterialTheme.colorScheme.primary)
+                    )
+                }
+            )
+        }
+    }
+}
+
+@OptIn(ExperimentalLayoutApi::class)
+@Composable
+private fun PaletteChips(
+    options: List<Pair<String, String>>,
+    selected: String,
+    onSelect: (String) -> Unit
+) {
+    FlowRow(
+        horizontalArrangement = Arrangement.spacedBy(8.dp),
+        verticalArrangement = Arrangement.spacedBy(8.dp)
+    ) {
+        options.forEach { (value, label) ->
+            FilterChip(
+                selected = value == selected,
+                onClick = { onSelect(value) },
+                label = { Text(label) },
+                leadingIcon = {
+                    Box(
+                        Modifier
+                            .size(14.dp)
+                            .clip(CircleShape)
+                            .background(paletteSwatch(value))
+                    )
+                }
+            )
+        }
+    }
+}
+
+@OptIn(ExperimentalLayoutApi::class)
+@Composable
+private fun Swatches(
+    options: List<Pair<String, Color>>,
+    selected: String,
+    labels: Map<String, String>,
+    onSelect: (String) -> Unit
+) {
+    val colors = MaterialTheme.colorScheme
+    FlowRow(
+        horizontalArrangement = Arrangement.spacedBy(14.dp),
+        verticalArrangement = Arrangement.spacedBy(10.dp)
+    ) {
+        options.forEach { (value, color) ->
+            Box(
+                Modifier
+                    .size(40.dp)
+                    .clip(CircleShape)
+                    .background(color)
+                    .then(
+                        if (value == selected) Modifier.border(3.dp, colors.onSurface, CircleShape) else Modifier
+                    )
+                    .semantics { contentDescription = "${labels[value] ?: value} accent" }
+                    .clickable(role = Role.RadioButton) { onSelect(value) }
+            )
+        }
+    }
+}
+
+@Composable
+private fun SwitchRow(
+    title: String,
+    subtitle: String,
+    checked: Boolean,
+    enabled: Boolean = true,
+    onChange: (Boolean) -> Unit
+) {
     Row(verticalAlignment = Alignment.CenterVertically) {
         Column(Modifier.weight(1f)) {
             Text(title, style = MaterialTheme.typography.titleSmall)
@@ -212,6 +688,83 @@ private fun SwitchRow(title: String, subtitle: String, checked: Boolean, onChang
                 color = MaterialTheme.colorScheme.onSurfaceVariant
             )
         }
-        Switch(checked = checked, onCheckedChange = onChange)
+        Switch(checked = checked, onCheckedChange = onChange, enabled = enabled)
     }
+}
+
+@Composable
+private fun SliderRow(
+    title: String,
+    value: Int,
+    range: IntRange,
+    label: (Int) -> String,
+    onCommit: (Int) -> Unit
+) {
+    var local by remember(value) { mutableFloatStateOf(value.toFloat()) }
+    val current = local.roundToInt()
+    Column {
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            Text(title, style = MaterialTheme.typography.titleSmall, modifier = Modifier.weight(1f))
+            Text(
+                label(current),
+                color = MaterialTheme.colorScheme.primary,
+                style = MaterialTheme.typography.labelLarge
+            )
+        }
+        Slider(
+            value = local,
+            onValueChange = { local = it },
+            onValueChangeFinished = { onCommit(local.roundToInt()) },
+            valueRange = range.first.toFloat()..range.last.toFloat(),
+            steps = (range.last - range.first - 1).coerceAtLeast(0)
+        )
+    }
+}
+
+@Composable
+private fun StepperRow(
+    title: String,
+    subtitle: String,
+    value: Int,
+    range: IntRange,
+    onChange: (Int) -> Unit
+) {
+    Row(verticalAlignment = Alignment.CenterVertically) {
+        Column(Modifier.weight(1f)) {
+            Text(title, style = MaterialTheme.typography.titleSmall)
+            Text(
+                subtitle,
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant
+            )
+        }
+        IconButton(
+            onClick = { if (value > range.first) onChange(value - 1) },
+            enabled = value > range.first
+        ) {
+            Icon(HavenIcons.Minus, contentDescription = "Decrease $title")
+        }
+        Text(
+            "$value",
+            style = MaterialTheme.typography.titleMedium,
+            color = MaterialTheme.colorScheme.primary
+        )
+        IconButton(
+            onClick = { if (value < range.last) onChange(value + 1) },
+            enabled = value < range.last
+        ) {
+            Icon(HavenIcons.Plus, contentDescription = "Increase $title")
+        }
+    }
+}
+
+private fun openWallpaperPicker(context: Context) {
+    val intent = Intent(Intent.ACTION_SET_WALLPAPER).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+    runCatching {
+        context.startActivity(Intent.createChooser(intent, "Wallpaper").addFlags(Intent.FLAG_ACTIVITY_NEW_TASK))
+    }.onFailure { toast(context, "No wallpaper app found") }
+}
+
+private fun toast(context: Context, message: String) {
+    Toast.makeText(context, message, Toast.LENGTH_SHORT).show()
 }

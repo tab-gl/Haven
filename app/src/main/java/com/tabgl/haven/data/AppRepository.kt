@@ -71,11 +71,15 @@ class AppRepository(context: Context) {
         return info?.activityInfo?.packageName?.takeIf { it != "android" }
     }
 
-    /** Emits whenever apps are installed, removed, updated, or the locale (labels) changes. */
-    fun changes(): Flow<Unit> = callbackFlow {
+    /**
+     * Emits the packages that changed whenever apps are installed, removed, updated, or the locale
+     * (labels) changes — so callers can drop stale icons as well as reload the list.
+     */
+    fun changes(): Flow<Set<String>> = callbackFlow {
         val receiver = object : BroadcastReceiver() {
             override fun onReceive(context: Context, intent: Intent) {
-                trySend(Unit)
+                val packageName = intent.data?.schemeSpecificPart
+                trySend(if (packageName.isNullOrBlank()) emptySet() else setOf(packageName))
             }
         }
         val packages = IntentFilter().apply {
